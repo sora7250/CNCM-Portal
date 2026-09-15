@@ -9,13 +9,15 @@
   <!-- 認証セッション判定：未ログイン時はlogin.htmlへ強制送還 -->
   <script>
     if (!localStorage.getItem('cncm_custom_id')) {
-      window.location.replace('login.html');
+      const currentPath = window.location.pathname;
+      const basePath = currentPath.substring(0, currentPath.lastIndexOf('/') + 1);
+      window.location.replace(window.location.origin + basePath + 'login.html');
     }
   </script>
 </head>
 <body>
 
-  <!-- ================= 共通ポップアップダイアログ ================= -->
+  <!-- ================= 共通通知ポップアップ ================= -->
   <div class="custom-modal-backdrop" id="customDialog">
     <div class="custom-dialog-card">
       <div class="dialog-icon" id="dialogIcon">ℹ️</div>
@@ -45,7 +47,7 @@
   <!-- ================= 一般クリエイター空間 ================= -->
   <div id="userAppContainer" class="app-root-view">
     
-    <!-- 統合ヘッダー -->
+    <!-- 統合ヘッダー（AI起動ボタン一元化版） -->
     <header class="app-header">
       <div class="header-left">
         <span class="brand-logo">CNCM</span>
@@ -55,6 +57,8 @@
         <span class="header-username" id="displayUsername">読み込み中...</span>
       </div>
       <div class="header-right">
+        <!-- ヘッダー一元化：Gemini AIエージェント起動ボタン -->
+        <button class="icon-action-btn" id="headerAiTriggerBtn" onclick="toggleAiConcierge()" title="CNCM専属AIエージェント起動">🤖 AI相談</button>
         <button class="icon-action-btn" id="salvagedHeaderLogoutBtn" style="color: var(--danger); border-color: var(--danger);" onclick="triggerCompleteLogout()" title="安全にログアウト">🚪 退出</button>
         <button class="icon-action-btn" id="fullscreenToggleBtn" onclick="toggleFullscreen()" title="全画面切替">⛶</button>
         <button class="icon-action-btn" onclick="openModal('accountHubModal')" title="アカウント統合管理">👤 マイ管理</button>
@@ -68,7 +72,7 @@
       <span class="alert-text" id="emergencyBannerText"></span>
     </div>
 
-    <!-- 24時間ストーリーズ・トレイ（機能⑤） -->
+    <!-- 24時間ストーリーズ・トレイ -->
     <div class="stories-scroll-tray" id="storiesTray">
       <div class="story-circle add-story" onclick="openNewStoryDialog()">
         <div class="story-avatar-wrap">＋</div>
@@ -225,6 +229,26 @@
 
   <!-- ================= 各種統合モーダル群 ================= -->
 
+  <!-- ヘッダー連動：CNCM AIエージェント (Gemini) 対話ウィンドウ -->
+  <div class="ai-concierge-window" id="aiConciergeWindow" style="display: none;">
+    <div class="ai-window-header">
+      <div style="display: flex; align-items: center; gap: 0.4rem;">
+        <span style="font-size: 1.1rem;">🤖</span>
+        <strong>CNCM AI エージェント (Gemini)</strong>
+      </div>
+      <button class="modal-close-btn" onclick="toggleAiConcierge()">✕</button>
+    </div>
+    <div class="ai-window-body" id="aiChatStream">
+      <div class="chat-bubble other">
+        こんにちは！CNCM専属AIエージェントです。創作の壁打ち（アイデア出し、色彩・構成・音響相談）からアプリの使い方案内まで、何でも気軽に相談してくださいね！✨
+      </div>
+    </div>
+    <div class="ai-window-footer">
+      <input type="text" id="aiChatInput" class="form-control" placeholder="AIエージェントに質問・相談..." onkeydown="if(event.key==='Enter') askAiConcierge()">
+      <button class="btn btn-primary btn-small" id="aiChatSendBtn" onclick="askAiConcierge()">送信</button>
+    </div>
+  </div>
+
   <!-- アカウント統合管理センター（マイ管理） -->
   <div class="modal-backdrop" id="accountHubModal">
     <div class="modal-sheet modal-sheet-lg">
@@ -304,23 +328,7 @@
     </div>
   </div>
 
-  <!-- AIコンシェルジュ（機能④） -->
-  <div class="ai-concierge-bubble" id="aiConciergeTrigger" onclick="toggleAiConcierge()"><span>🤖</span></div>
-  <div class="ai-concierge-window" id="aiConciergeWindow" style="display: none;">
-    <div class="ai-window-header">
-      <strong>🤖 CNCM AI コンシェルジュ</strong>
-      <button class="modal-close-btn" onclick="toggleAiConcierge()">✕</button>
-    </div>
-    <div class="ai-window-body" id="aiChatStream">
-      <div class="chat-bubble other">こんにちは！創作の壁打ちやアプリの使い方、何でも聞いてくださいね。</div>
-    </div>
-    <div class="ai-window-footer">
-      <input type="text" id="aiChatInput" class="form-control" placeholder="AIに相談・質問..." onkeydown="if(event.key==='Enter') askAiConcierge()">
-      <button class="btn btn-primary btn-small" onclick="askAiConcierge()">送信</button>
-    </div>
-  </div>
-
-  <!-- 公開プロフィール・モーダル（機能⑨） -->
+  <!-- 公開プロフィール・モーダル -->
   <div class="modal-backdrop" id="publicProfileModal">
     <div class="modal-sheet">
       <div class="modal-header">
