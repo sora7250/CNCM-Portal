@@ -5,15 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>CanvasNetCreatorMEMBERSHIP - CNCM</title>
   <link rel="stylesheet" href="style.css">
-  
-  <!-- 認証セッション判定：未ログイン時はlogin.htmlへ強制送還 -->
-  <script>
-    if (!localStorage.getItem('cncm_custom_id')) {
-      const currentPath = window.location.pathname;
-      const basePath = currentPath.substring(0, currentPath.lastIndexOf('/') + 1);
-      window.location.replace(window.location.origin + basePath + 'login.html');
-    }
-  </script>
 </head>
 <body>
 
@@ -44,10 +35,62 @@
     </div>
   </div>
 
+  <!-- ================= 【新設内包】ログイン ＆ 新規登録ビュー ================= -->
+  <div id="authViewContainer" class="auth-viewport-wrapper" style="display: none;">
+    <div class="login-card">
+      <div class="brand-title">CanvasNetCreatorMEMBERSHIP</div>
+      <p class="brand-desc">完全匿名・相互扶助のクリエイター空間へようこそ。</p>
+
+      <!-- 認証方式切替タブ -->
+      <div class="auth-tab-bar">
+        <button class="auth-tab-btn active" id="tabLoginBtn" onclick="switchAuthMode('login')">ログイン</button>
+        <button class="auth-tab-btn" id="tabRegisterBtn" onclick="switchAuthMode('register')">新規登録</button>
+      </div>
+
+      <!-- ① ログインフォーム -->
+      <div id="loginFormSection">
+        <div class="form-group">
+          <label>固有ID または 登録名</label>
+          <input type="text" id="loginIdInput" class="form-control" placeholder="CNCM-XXXX または 登録ID">
+        </div>
+        <div class="form-group">
+          <label>パスワード</label>
+          <input type="password" id="loginPasswordInput" class="form-control" placeholder="パスワードを入力" onkeydown="if(event.key==='Enter') executeInAppLogin()">
+        </div>
+        <button class="btn btn-primary" style="width: 100%; margin-top: 0.8rem;" onclick="executeInAppLogin()">入場する</button>
+        <div class="status-msg" id="loginStatusText"></div>
+      </div>
+
+      <!-- ② 新規登録フォーム -->
+      <div id="registerFormSection" style="display: none;">
+        <div class="avatar-preview-box" id="regAvatarBox" onclick="document.getElementById('regAvatarFileInput').click()" title="タップして自由写真をアップロード">
+          <span id="regAvatarEmoji">🎨</span>
+        </div>
+        <input type="file" id="regAvatarFileInput" accept="image/*" style="display: none;" onchange="handleInAppAvatarSelect(event)">
+        <div style="font-size: 0.72rem; color: var(--text-sub); margin-bottom: 0.8rem;">▲ タップして写真をアバターに設定</div>
+
+        <div class="form-group">
+          <label>運営管理用 固有ID（自動採番）</label>
+          <input type="text" id="regCustomIdInput" class="form-control" maxlength="15">
+        </div>
+        <div class="form-group">
+          <label>コミュニティ内 匿名ネーム</label>
+          <input type="text" id="regNicknameInput" class="form-control" placeholder="例：匿名クリエイター01" maxlength="15">
+        </div>
+        <div class="form-group">
+          <label>パスワード（半角英数6文字以上）</label>
+          <input type="password" id="regPasswordInput" class="form-control" placeholder="パスワードを設定">
+        </div>
+        <button class="btn btn-primary" style="width: 100%; margin-top: 0.8rem;" onclick="executeInAppRegister()">アカウントを作成して入場</button>
+        <div class="status-msg" id="regStatusText"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- ================= 一般クリエイター空間 ================= -->
-  <div id="userAppContainer" class="app-root-view">
+  <div id="userAppContainer" class="app-root-view" style="display: none;">
     
-    <!-- 統合ヘッダー（AI起動ボタン一元化版） -->
+    <!-- 統合ヘッダー（AI相談ボタン一元化版） -->
     <header class="app-header">
       <div class="header-left">
         <span class="brand-logo">CNCM</span>
@@ -57,7 +100,6 @@
         <span class="header-username" id="displayUsername">読み込み中...</span>
       </div>
       <div class="header-right">
-        <!-- ヘッダー一元化：Gemini AIエージェント起動ボタン -->
         <button class="icon-action-btn" id="headerAiTriggerBtn" onclick="toggleAiConcierge()" title="CNCM専属AIエージェント起動">🤖 AI相談</button>
         <button class="icon-action-btn" id="salvagedHeaderLogoutBtn" style="color: var(--danger); border-color: var(--danger);" onclick="triggerCompleteLogout()" title="安全にログアウト">🚪 退出</button>
         <button class="icon-action-btn" id="fullscreenToggleBtn" onclick="toggleFullscreen()" title="全画面切替">⛶</button>
@@ -240,7 +282,7 @@
     </div>
     <div class="ai-window-body" id="aiChatStream">
       <div class="chat-bubble other">
-        こんにちは！CNCM専属AIエージェントです。創作の壁打ち（アイデア出し、色彩・構成・音響相談）からアプリの使い方案内まで、何でも気軽に相談してくださいね！✨
+        こんにちは！CNCM専属AIエージェントです。創作の壁打ちから機能案内まで、何でも気軽に相談してくださいね！✨
       </div>
     </div>
     <div class="ai-window-footer">
@@ -264,7 +306,7 @@
             <p>ロールランク: <span class="ore-rank-badge rank-coal" id="hubRankBadge">Coal</span></p>
             <p>累計イイネ数: <span id="hubLikesDisplay">0</span></p>
             <div style="margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 0.8rem;">
-              <button class="btn btn-danger btn-small" onclick="triggerCompleteLogout()">🚪 完全にログアウト</button>
+              <button class="btn btn-danger btn-small" onclick="triggerCompleteLogout()">🚪 ログアウト</button>
             </div>
           </div>
           <div class="card">
