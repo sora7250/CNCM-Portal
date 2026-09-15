@@ -1,13 +1,25 @@
 /**
  * CanvasNetCreatorMEMBERSHIP (CNCM)
- * 完全統合マスターエンジン - 親JS (完全版・404安全パス解決済)
+ * 完全統合マスターエンジン - 親JS (最新完全版)
+ * 接続先：3大独立バックエンド (スプシ連携 / Drive連携 / API隠蔽プロキシ)
  */
 
 // =========================================================================
-// 1. 外部サービス接続設定（★デプロイした各GASのURLを貼り付けてください）
+// 1. 3大独立バックエンド接続設定（★3つのGASデプロイURLをここに貼るだけ！）
 // =========================================================================
-const GAS_API_URL = "https://script.google.com/macros/s/AKfycbz_BR6RGEI_IjRhX5SXxEDOSZUvcb3S0HOk83oFq8asFDjbSC5RR-9_87gE4IWWIZp7kA/exec";
-const DRIVE_GAS_API_URL = "https://script.google.com/macros/s/AKfycbwngjohnN8GSiXctUDy_Emy55QGxBfbzLEGv7F3WMqnl5-mkp5QOMnOBydYOvSzWABB/exec"
+// ① スプレッドシート連携用GAS（DB・在席同期・ユーザー管理・お題台帳）
+const GAS_DATABASE_URL = "https://script.google.com/macros/s/AKfycbz_BR6RGEI_IjRhX5SXxEDOSZUvcb3S0HOk83oFq8asFDjbSC5RR-9_87gE4IWWIZp7kA/exec";
+
+// ② Google Drive連携用GAS（親フォルダ自動スキャン・素材プレビュー・匿名中継保存）
+const GAS_DRIVE_URL = "https://script.google.com/macros/s/AKfycbwngjohnN8GSiXctUDy_Emy55QGxBfbzLEGv7F3WMqnl5-mkp5QOMnOBydYOvSzWABB/exec";
+
+// ③ Gemini API隠蔽専用GAS（GitHubキー漏洩を完全防止するAIプロキシ）
+const GAS_GEMINI_PROXY_URL = "https://script.google.com/macros/s/AKfycbwM2YGppBlyBHpAupfv90sHYRLDgK3x-7pI8ZDhAeiklK9Ineo7KwTGE-YXsMljIVnu/exec";
+
+
+// =========================================================================
+// 2. クライアント側セッション ＆ インメモリストア
+// =========================================================================
 let currentUser = {
   customId: localStorage.getItem('cncm_custom_id') || '',
   name: localStorage.getItem('cncm_username') || 'クリエイター',
@@ -17,9 +29,7 @@ let currentUser = {
   likesReceived: parseInt(localStorage.getItem('cncm_likes') || '0', 10)
 };
 
-// インメモリストア
 let loungeMembers = [];
-let openChatMessages = [];
 let feedPosts = JSON.parse(localStorage.getItem('cncm_feed_cache') || '[]');
 let stories = JSON.parse(localStorage.getItem('cncm_stories_cache') || '[]');
 let friends = JSON.parse(localStorage.getItem('cncm_friends_cache') || '[]');
@@ -28,43 +38,57 @@ let keyBuffer = '';
 let activeSubFolderName = "SE_BGM";
 let fileToUpload = null;
 
+// AIエージェント対話履歴バッファ（システムコンテキスト内蔵）
+let aiConversationHistory = [
+  {
+    role: "user",
+    parts: [{
+      text: "あなたはクリエイター特化型コミュニティ『CanvasNetCreatorMEMBERSHIP（略称：CNCM）』の常駐専属AIエージェントです。名前は『CNCM AI』です。完全匿名で創作活動に励むメンバーの頼れるパートナーとして、映像・音楽・3D・イラスト・Web制作などの技術相談、アイデアの壁打ち、色彩や構図の助言、そしてアプリ内の機能案内（ポート自習室、素材Drive、相談Q&Aスレッド、公式お題コンペ等）を、知的かつ温かみのある親しみやすいトーンでサポートしてください。"
+    }]
+  },
+  {
+    role: "model",
+    parts: [{
+      text: "了解しました！私はCNCMの専属クリエイティブAIエージェントです。コミュニティの皆様の創作が最高のものになるよう、制作の壁打ちからアプリの使い方案内まで全力でサポートいたします！✨"
+    }]
+  }
+];
+
+
 // =========================================================================
-// 2. 在席・生存信号 ＆ 切断・ログアウト（404完全防止・安全パス解決版）
+// 3. 在席・生存信号 ＆ 切断・ログアウト（404完全防止・安全パス解決版）
 // =========================================================================
 
 // 60秒おきの生存信号（ハートビート）
 setInterval(() => {
-  if (currentUser.customId && !GAS_API_URL.includes("YOUR_DATABASE")) {
-    fetch(`${GAS_API_URL}?action=heartbeat&customId=${encodeURIComponent(currentUser.customId)}`, { mode: "no-cors" }).catch(() => {});
+  if (currentUser.customId && !GAS_DATABASE_URL.includes("YOUR_DATABASE")) {
+    fetch(`${GAS_DATABASE_URL}?action=heartbeat&customId=${encodeURIComponent(currentUser.customId)}`, { mode: "no-cors" }).catch(() => {});
   }
 }, 60000);
 
-// タブ閉じ・画面離脱時の即時切断
+// 画面離脱・タブ閉じ時の即時切断
 window.addEventListener('beforeunload', () => {
-  if (currentUser.customId && !GAS_API_URL.includes("YOUR_DATABASE")) {
-    navigator.sendBeacon(`${GAS_API_URL}?action=logout&customId=${encodeURIComponent(currentUser.customId)}`);
+  if (currentUser.customId && !GAS_DATABASE_URL.includes("YOUR_DATABASE")) {
+    navigator.sendBeacon(`${GAS_DATABASE_URL}?action=logout&customId=${encodeURIComponent(currentUser.customId)}`);
   }
 });
 
-// 【重要】ログアウト処理：404エラーを完全に防止する動的パス解決
+// 完全ログアウト処理（GitHub Pages環境でも404を起こさない動的絶対パス解決）
 window.triggerCompleteLogout = function() {
   const isConfirmed = confirm('【CNCM セッション終了】\nログアウトしてログイン画面に戻りますか？\n（在席ステータスはオフラインに更新されます）');
   if (!isConfirmed) return;
 
-  // 1. スプレッドシートへ退席通知を送信
-  if (currentUser.customId && !GAS_API_URL.includes("YOUR_DATABASE")) {
+  if (currentUser.customId && !GAS_DATABASE_URL.includes("YOUR_DATABASE")) {
     try {
-      navigator.sendBeacon(`${GAS_API_URL}?action=logout&customId=${encodeURIComponent(currentUser.customId)}`);
+      navigator.sendBeacon(`${GAS_DATABASE_URL}?action=logout&customId=${encodeURIComponent(currentUser.customId)}`);
     } catch (e) {
-      fetch(`${GAS_API_URL}?action=logout&customId=${encodeURIComponent(currentUser.customId)}`, { mode: "no-cors" }).catch(() => {});
+      fetch(`${GAS_DATABASE_URL}?action=logout&customId=${encodeURIComponent(currentUser.customId)}`, { mode: "no-cors" }).catch(() => {});
     }
   }
 
-  // 2. ブラウザのセッション情報を完全初期化
   localStorage.clear();
   sessionStorage.clear();
 
-  // 3. 【404防止】現在のURLからベースディレクトリを動的計算してlogin.htmlへ安全リダイレクト
   const currentPath = window.location.pathname;
   const basePath = currentPath.substring(0, currentPath.lastIndexOf('/') + 1);
   const targetLoginUrl = window.location.origin + basePath + 'login.html';
@@ -72,15 +96,15 @@ window.triggerCompleteLogout = function() {
   window.location.replace(targetLoginUrl);
 };
 
-// 既存関数の互換エイリアス
 window.handleLogout = window.triggerCompleteLogout;
 
+
 // =========================================================================
-// 3. 在席メンバー自動同期（30秒周期・エポックミリ秒治療済み）
+// 4. 在席メンバー自動同期（30秒周期・エポックミリ秒治療済み）
 // =========================================================================
 function syncLoungeMembersFromGAS() {
-  if (GAS_API_URL.includes("YOUR_DATABASE")) return;
-  fetch(`${GAS_API_URL}?action=getLoungeMembers`)
+  if (GAS_DATABASE_URL.includes("YOUR_DATABASE")) return;
+  fetch(`${GAS_DATABASE_URL}?action=getLoungeMembers`)
     .then(res => res.json())
     .then(data => {
       if (Array.isArray(data)) {
@@ -142,8 +166,8 @@ window.updateLoungeStatus = function() {
   });
   renderLoungeMembers();
 
-  if (!GAS_API_URL.includes("YOUR_DATABASE")) {
-    fetch(GAS_API_URL, {
+  if (!GAS_DATABASE_URL.includes("YOUR_DATABASE")) {
+    fetch(GAS_DATABASE_URL, {
       method: "POST",
       mode: "no-cors",
       headers: { "Content-Type": "application/json" },
@@ -159,8 +183,9 @@ window.updateLoungeStatus = function() {
   showCustomDialog({ icon: '🟢', title: 'ステータス更新', message: '自習室の在席状況を更新しました。' });
 };
 
+
 // =========================================================================
-// 4. ソーシャル機能（フィード・ストーリーズ・AI・公開プロフィール）
+// 5. ソーシャル機能（フィード・ストーリーズ・公開プロフィール・全体チャット）
 // =========================================================================
 
 // Xライク・フィード投稿
@@ -228,7 +253,7 @@ window.likeFeedPost = function(id) {
   }
 };
 
-// ストーリーズ
+// 24時間ストーリーズ
 window.openNewStoryDialog = function() {
   const txt = prompt('24時間で消滅する進捗・ひとことストーリーズを投稿:');
   if (!txt) return;
@@ -252,27 +277,6 @@ function renderStories() {
     tray.appendChild(c);
   });
 }
-
-// AIコンシェルジュ
-window.toggleAiConcierge = function() {
-  const win = document.getElementById('aiConciergeWindow');
-  win.style.display = (win.style.display === 'none') ? 'flex' : 'none';
-};
-
-window.askAiConcierge = function() {
-  const input = document.getElementById('aiChatInput');
-  const txt = input.value.trim();
-  if (!txt) return;
-
-  const stream = document.getElementById('aiChatStream');
-  stream.innerHTML += `<div class="chat-bubble mine">${txt}</div>`;
-  input.value = '';
-
-  setTimeout(() => {
-    stream.innerHTML += `<div class="chat-bubble other">【AI】「${txt}」ですね！制作アイデアの壁打ちならフォーラムのQ&Aスレッドもぜひご活用ください！</div>`;
-    stream.scrollTop = stream.scrollHeight;
-  }, 400);
-};
 
 // 公開プロフィール
 window.openUserProfile = function(cid) {
@@ -314,8 +318,115 @@ window.sendOpenChatMessage = function() {
   stream.scrollTop = stream.scrollHeight;
 };
 
+
 // =========================================================================
-// 5. Google Driveエクスプローラー ＆ 完全匿名アップロード
+// 6. Gemini API専用隠蔽プロキシ対話エンジン（ヘッダー連動）
+// =========================================================================
+
+// ヘッダーボタン連動：AIエージェントウィンドウ開閉
+window.toggleAiConcierge = function() {
+  const win = document.getElementById('aiConciergeWindow');
+  const btn = document.getElementById('headerAiTriggerBtn');
+  const isHidden = (win.style.display === 'none' || win.style.display === '');
+  
+  win.style.display = isHidden ? 'flex' : 'none';
+  if (btn) btn.classList.toggle('active', isHidden);
+
+  if (isHidden) {
+    const input = document.getElementById('aiChatInput');
+    if (input) setTimeout(() => input.focus(), 100);
+  }
+};
+
+// 独立プロキシGAS経由のセキュアAI対話処理
+window.askAiConcierge = async function() {
+  const input = document.getElementById('aiChatInput');
+  const sendBtn = document.getElementById('aiChatSendBtn');
+  const userText = input.value.trim();
+  if (!userText) return;
+
+  const stream = document.getElementById('aiChatStream');
+
+  // 1. ユーザー発言を描画
+  const userBubble = document.createElement('div');
+  userBubble.className = 'chat-bubble mine';
+  userBubble.innerText = userText;
+  stream.appendChild(userBubble);
+  input.value = '';
+  stream.scrollTop = stream.scrollHeight;
+
+  // 2. 思考中インジケータ表示
+  sendBtn.disabled = true;
+  const loadingIndicator = document.createElement('div');
+  loadingIndicator.className = 'ai-typing-indicator';
+  loadingIndicator.id = 'aiTypingIndicator';
+  loadingIndicator.innerHTML = '<span>⚡</span> <span>Geminiが思考中...</span>';
+  stream.appendChild(loadingIndicator);
+  stream.scrollTop = stream.scrollHeight;
+
+  aiConversationHistory.push({
+    role: "user",
+    parts: [{ text: userText }]
+  });
+
+  try {
+    if (GAS_GEMINI_PROXY_URL.includes("YOUR_GEMINI") || !GAS_GEMINI_PROXY_URL) {
+      throw new Error("app.js 内の GAS_GEMINI_PROXY_URL が未設定です。Gemini専用プロキシGASのURLを設定してください。");
+    }
+
+    // 3. 独立プロキシGASへ中継リクエスト
+    const response = await fetch(GAS_GEMINI_PROXY_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({
+        contents: aiConversationHistory
+      })
+    });
+
+    const resData = await response.json();
+
+    if (resData.error) {
+      throw new Error(resData.error.message || "Gemini APIエラーが発生しました。");
+    }
+
+    const aiReplyText = resData.candidates && resData.candidates[0] && resData.candidates[0].content && resData.candidates[0].content.parts[0]
+      ? resData.candidates[0].content.parts[0].text
+      : "申し訳ありません、返答の生成に失敗しました。";
+
+    // 4. 会話履歴にAI返答を追加（マルチターン文脈保持）
+    aiConversationHistory.push({
+      role: "model",
+      parts: [{ text: aiReplyText }]
+    });
+
+    const typingEl = document.getElementById('aiTypingIndicator');
+    if (typingEl) typingEl.remove();
+
+    const aiBubble = document.createElement('div');
+    aiBubble.className = 'chat-bubble other';
+    aiBubble.style.whiteSpace = 'pre-wrap';
+    aiBubble.innerText = aiReplyText;
+    stream.appendChild(aiBubble);
+
+  } catch (err) {
+    const typingEl = document.getElementById('aiTypingIndicator');
+    if (typingEl) typingEl.remove();
+
+    const errorBubble = document.createElement('div');
+    errorBubble.className = 'chat-bubble other';
+    errorBubble.style.borderColor = 'var(--danger)';
+    errorBubble.style.color = 'var(--danger)';
+    errorBubble.innerText = `【AIエージェント通信エラー】\n${err.message}`;
+    stream.appendChild(errorBubble);
+  } finally {
+    sendBtn.disabled = false;
+    stream.scrollTop = stream.scrollHeight;
+  }
+};
+
+
+// =========================================================================
+// 7. Google Drive専用GAS連携（素材エクスプローラー ＆ 完全匿名アップロード）
 // =========================================================================
 window.openDriveExplorer = function(subName) {
   activeSubFolderName = subName || "SE_BGM";
@@ -330,12 +441,12 @@ window.openDriveExplorer = function(subName) {
   container.innerHTML = "";
   loading.style.display = "block";
 
-  if (DRIVE_GAS_API_URL.includes("YOUR_DRIVE")) {
+  if (GAS_DRIVE_URL.includes("YOUR_DRIVE")) {
     loading.innerText = "Drive専用GASのURLを設定すると、素材がリアルタイム同期されます。";
     return;
   }
 
-  fetch(`${DRIVE_GAS_API_URL}?action=getFilesBySubFolder&subFolderName=${encodeURIComponent(activeSubFolderName)}`)
+  fetch(`${GAS_DRIVE_URL}?action=getFilesBySubFolder&subFolderName=${encodeURIComponent(activeSubFolderName)}`)
     .then(res => res.json())
     .then(response => {
       loading.style.display = "none";
@@ -398,7 +509,7 @@ window.executeDriveUpload = function() {
   reader.onload = function(e) {
     pBar.style.width = '70%';
     const base64 = e.target.result.split(',')[1];
-    fetch(DRIVE_GAS_API_URL, {
+    fetch(GAS_DRIVE_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: JSON.stringify({
@@ -431,8 +542,9 @@ window.executeDriveUpload = function() {
   reader.readAsDataURL(fileToUpload);
 };
 
+
 // =========================================================================
-// 6. 管理者裏コマンド ＆ 統括司令室エンジン
+// 8. 管理者裏コマンド ＆ 統括司令室エンジン
 // =========================================================================
 window.addEventListener('keydown', (e) => {
   const tag = document.activeElement ? document.activeElement.tagName : '';
@@ -467,8 +579,8 @@ window.exitAdminCenter = function() {
 };
 
 function fetchAdminUsers() {
-  if (GAS_API_URL.includes("YOUR_DATABASE")) return;
-  fetch(`${GAS_API_URL}?action=adminGetAllUsers`)
+  if (GAS_DATABASE_URL.includes("YOUR_DATABASE")) return;
+  fetch(`${GAS_DATABASE_URL}?action=adminGetAllUsers`)
     .then(res => res.json())
     .then(users => {
       if (Array.isArray(users)) {
@@ -541,8 +653,8 @@ window.triggerPanicLockdown = function() {
 };
 
 function postAdminAction(payload) {
-  if (GAS_API_URL.includes("YOUR_DATABASE")) return;
-  fetch(GAS_API_URL, {
+  if (GAS_DATABASE_URL.includes("YOUR_DATABASE")) return;
+  fetch(GAS_DATABASE_URL, {
     method: "POST",
     mode: "no-cors",
     headers: { "Content-Type": "application/json" },
@@ -558,8 +670,9 @@ window.switchAdminSubView = function(id, btn) {
   if (t) t.style.display = 'block';
 };
 
+
 // =========================================================================
-// 7. 基本UI制御・ユーティリティ・起動処理
+// 9. 基本UI制御・ユーティリティ・起動パイプライン
 // =========================================================================
 window.switchMainTab = function(panelId, btn) {
   document.querySelectorAll('.main-tab-btn').forEach(b => b.classList.remove('active'));
@@ -627,12 +740,15 @@ window.onload = () => {
   badge.className = `ore-rank-badge rank-${currentUser.rank.toLowerCase()}`;
   badge.innerText = currentUser.rank;
 
+  // スプレッドシート在席自動同期開始
   syncLoungeMembersFromGAS();
   setInterval(syncLoungeMembersFromGAS, 30000);
 
+  // ソーシャル描画
   renderFeed();
   renderStories();
 
+  // 運営自動直行判定
   const urlParams = new URLSearchParams(window.location.search);
   if (urlParams.get('launchAdmin') === 'true' || localStorage.getItem('cncm_is_admin') === 'true') {
     launchAdminCommandCenter();
