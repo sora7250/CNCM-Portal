@@ -1,19 +1,14 @@
 /**
  * CanvasNetCreatorMEMBERSHIP (CNCM)
- * 完全統合マスターエンジン - 親JS (最新完全版)
- * 接続先：3大独立バックエンド (スプシ連携 / Drive連携 / API隠蔽プロキシ)
+ * 完全統合マスターエンジン - 親JS (完全無欠版)
+ * 接続先：3大独立バックエンド (スプシDB / Drive共有 / Gemini API隠蔽プロキシ)
  */
 
 // =========================================================================
 // 1. 3大独立バックエンド接続設定（★3つのGASデプロイURLをここに貼るだけ！）
 // =========================================================================
-// ① スプレッドシート連携用GAS（DB・在席同期・ユーザー管理・お題台帳）
 const GAS_DATABASE_URL = "https://script.google.com/macros/s/AKfycbz_BR6RGEI_IjRhX5SXxEDOSZUvcb3S0HOk83oFq8asFDjbSC5RR-9_87gE4IWWIZp7kA/exec";
-
-// ② Google Drive連携用GAS（親フォルダ自動スキャン・素材プレビュー・匿名中継保存）
 const GAS_DRIVE_URL = "https://script.google.com/macros/s/AKfycbwngjohnN8GSiXctUDy_Emy55QGxBfbzLEGv7F3WMqnl5-mkp5QOMnOBydYOvSzWABB/exec";
-
-// ③ Gemini API隠蔽専用GAS（GitHubキー漏洩を完全防止するAIプロキシ）
 const GAS_GEMINI_PROXY_URL = "https://script.google.com/macros/s/AKfycbwM2YGppBlyBHpAupfv90sHYRLDgK3x-7pI8ZDhAeiklK9Ineo7KwTGE-YXsMljIVnu/exec";
 
 
@@ -37,6 +32,7 @@ let adminAllUsers = [];
 let keyBuffer = '';
 let activeSubFolderName = "SE_BGM";
 let fileToUpload = null;
+let inAppAvatarBase64 = null;
 
 // AIエージェント対話履歴バッファ（システムコンテキスト内蔵）
 let aiConversationHistory = [
@@ -56,7 +52,213 @@ let aiConversationHistory = [
 
 
 // =========================================================================
-// 3. 在席・生存信号 ＆ 切断・ログアウト（404完全防止・安全パス解決版）
+// 3. 描画完全保証：フェイルセーフ型 ビュー切り替えエンジン
+// =========================================================================
+function updateAppViewState() {
+  const authView = document.getElementById('authViewContainer');
+  const userView = document.getElementById('userAppContainer');
+  const adminView = document.getElementById('adminDashboardRoot');
+
+  if (!authView || !userView) return;
+
+  // 1. 未ログインの場合：ログインカードを画面中央に強制表示
+  if (!currentUser.customId || currentUser.customId === 'null' || currentUser.customId.trim() === '') {
+    authView.style.setProperty('display', 'flex', 'important');
+    userView.style.setProperty('display', 'none', 'important');
+    if (adminView) adminView.style.setProperty('display', 'none', 'important');
+    switchAuthMode('login');
+    return;
+  }
+
+  // 2. 運営直行フラグがある場合：管理者画面を表示
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('launchAdmin') === 'true' || localStorage.getItem('cncm_is_admin') === 'true') {
+    authView.style.setProperty('display', 'none', 'important');
+    userView.style.setProperty('display', 'none', 'important');
+    launchAdminCommandCenter();
+    return;
+  }
+
+  // 3. 通常ログイン済みの場合：一般ポータル画面を表示
+  authView.style.setProperty('display', 'none', 'important');
+  userView.style.setProperty('display', 'flex', 'important');
+  if (adminView) adminView.style.setProperty('display', 'none', 'important');
+  
+  updateUserHeaderUI();
+}
+
+// 認証タブ切替（ログイン ⇄ 新規登録）
+window.switchAuthMode = function(mode) {
+  const loginSection = document.getElementById('loginFormSection');
+  const regSection = document.getElementById('registerFormSection');
+  const tabLogin = document.getElementById('tabLoginBtn');
+  const tabReg = document.getElementById('tabRegisterBtn');
+
+  if (loginSection) loginSection.style.display = (mode === 'login') ? 'block' : 'none';
+  if (regSection) regSection.style.display = (mode === 'register') ? 'block' : 'none';
+  if (tabLogin) tabLogin.classList.toggle('active', mode === 'login');
+  if (tabReg) tabReg.classList.toggle('active', mode === 'register');
+
+  if (mode === 'register') {
+    const regId = document.getElementById('regCustomIdInput');
+    if (regId && !regId.value) regId.value = `CNCM-${Math.floor(1000 + Math.random() * 9000)}`;
+  }
+};
+
+window.handleInAppAvatarSelect = function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (evt) => {
+    inAppAvatarBase64 = evt.target.result;
+    const box = document.getElementById('regAvatarBox');
+    if (box) box.innerHTML = `<img src="${inAppAvatarBase64}">`;
+  };
+  reader.readAsDataURL(file);
+};
+
+// 同一画面内でのログイン実行
+window.executeInAppLogin = function() {
+  const idInput = document.getElementById('loginIdInput');
+  const passInput = document.getElementById('loginPasswordInput');
+  const status = document.getElementById('loginStatusText');
+
+  const idOrName = idInput ? idInput.value.trim() : '';
+  const pass = passInput ? passInput.value.trim() : '';
+
+  if (!idOrName || !pass) {
+    if (status) {
+      status.style.color = 'var(--danger)';
+      status.innerText = 'IDとパスワードを入力してください。';
+    }
+    return;
+  }
+
+  if (status) {
+    status.style.color = 'var(--text-sub)';
+    status.innerText = '照合中...';
+  }
+
+  // 運営アカウント直接判定
+  if (idOrName.startsWith('ADMIN-') || idOrName === 'CNCM-OWNER') {
+    if (!GAS_DATABASE_URL.includes("YOUR_DATABASE")) {
+      fetch(`${GAS_DATABASE_URL}?action=verifyAdminAccount&customId=${encodeURIComponent(idOrName)}&password=${encodeURIComponent(pass)}`)
+        .then(res => res.json())
+        .then(res => {
+          if (res.status === 'success') {
+            localStorage.setItem('cncm_is_admin', 'true');
+            localStorage.setItem('cncm_custom_id', res.admin.customId);
+            localStorage.setItem('cncm_username', res.admin.name);
+            currentUser.customId = res.admin.customId;
+            currentUser.name = res.admin.name;
+            updateAppViewState();
+          } else {
+            if (status) {
+              status.style.color = 'var(--danger)';
+              status.innerText = '運営認証に失敗しました。';
+            }
+          }
+        })
+        .catch(() => proceedGeneralLogin(idOrName));
+      return;
+    }
+  }
+
+  proceedGeneralLogin(idOrName);
+};
+
+function proceedGeneralLogin(idOrName) {
+  const status = document.getElementById('loginStatusText');
+  localStorage.setItem('cncm_is_admin', 'false');
+  localStorage.setItem('cncm_custom_id', idOrName);
+  localStorage.setItem('cncm_username', idOrName);
+  localStorage.setItem('cncm_rank', 'Coal');
+  currentUser.customId = idOrName;
+  currentUser.name = idOrName;
+
+  if (status) {
+    status.style.color = 'var(--success)';
+    status.innerText = '入場します...';
+  }
+  setTimeout(() => { updateAppViewState(); }, 300);
+}
+
+// 同一画面内での新規登録実行
+window.executeInAppRegister = function() {
+  const customId = document.getElementById('regCustomIdInput').value.trim();
+  const name = document.getElementById('regNicknameInput').value.trim();
+  const pass = document.getElementById('regPasswordInput').value.trim();
+  const status = document.getElementById('regStatusText');
+
+  if (!customId || !name || pass.length < 6) {
+    if (status) {
+      status.style.color = 'var(--danger)';
+      status.innerText = '全項目を入力してください（パスワード6文字以上）。';
+    }
+    return;
+  }
+
+  if (!GAS_DATABASE_URL.includes("YOUR_DATABASE")) {
+    fetch(GAS_DATABASE_URL, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "registerUser", customId: customId, nickname: name, avatar: "🎨", password: pass })
+    }).catch(() => {});
+  }
+
+  localStorage.setItem('cncm_custom_id', customId);
+  localStorage.setItem('cncm_username', name);
+  localStorage.setItem('cncm_avatar', '🎨');
+  if (inAppAvatarBase64) localStorage.setItem('cncm_custom_image', inAppAvatarBase64);
+  localStorage.setItem('cncm_rank', 'Coal');
+  localStorage.setItem('cncm_is_admin', 'false');
+
+  currentUser.customId = customId;
+  currentUser.name = name;
+  updateAppViewState();
+};
+
+// 【完全安全ログアウト】別ページに飛ばず、同一画面でログインカードに戻るだけ！404は根絶！
+window.triggerCompleteLogout = function() {
+  const isConfirmed = confirm('【CNCM セッション終了】\nログアウトしてログイン画面に戻りますか？\n（在席ステータスはオフラインに更新されます）');
+  if (!isConfirmed) return;
+
+  if (currentUser.customId && !GAS_DATABASE_URL.includes("YOUR_DATABASE")) {
+    try { navigator.sendBeacon(`${GAS_DATABASE_URL}?action=logout&customId=${encodeURIComponent(currentUser.customId)}`); } catch(e) {}
+  }
+
+  localStorage.clear();
+  sessionStorage.clear();
+  currentUser.customId = '';
+  currentUser.name = '';
+
+  updateAppViewState();
+};
+
+window.handleLogout = window.triggerCompleteLogout;
+
+function updateUserHeaderUI() {
+  const dName = document.getElementById('displayUsername');
+  const dGreet = document.getElementById('dashUserGreeting');
+  const hId = document.getElementById('hubCustomIdDisplay');
+  const hLikes = document.getElementById('hubLikesDisplay');
+  const badge = document.getElementById('headerRankBadge');
+
+  if (dName) dName.innerText = `${currentUser.name} (${currentUser.customId})`;
+  if (dGreet) dGreet.innerText = currentUser.name;
+  if (hId) hId.innerText = currentUser.customId;
+  if (hLikes) hLikes.innerText = currentUser.likesReceived || 0;
+
+  if (badge) {
+    badge.className = `ore-rank-badge rank-${(currentUser.rank || 'coal').toLowerCase()}`;
+    badge.innerText = currentUser.rank || 'Coal';
+  }
+}
+
+
+// =========================================================================
+// 4. 在席・生存信号 ＆ メンバー自動同期（30秒周期・エポックミリ秒判定）
 // =========================================================================
 
 // 60秒おきの生存信号（ハートビート）
@@ -66,42 +268,13 @@ setInterval(() => {
   }
 }, 60000);
 
-// 画面離脱・タブ閉じ時の即時切断
+// 画面離脱時の即時切断ビーコン
 window.addEventListener('beforeunload', () => {
   if (currentUser.customId && !GAS_DATABASE_URL.includes("YOUR_DATABASE")) {
     navigator.sendBeacon(`${GAS_DATABASE_URL}?action=logout&customId=${encodeURIComponent(currentUser.customId)}`);
   }
 });
 
-// 完全ログアウト処理（GitHub Pages環境でも404を起こさない動的絶対パス解決）
-window.triggerCompleteLogout = function() {
-  const isConfirmed = confirm('【CNCM セッション終了】\nログアウトしてログイン画面に戻りますか？\n（在席ステータスはオフラインに更新されます）');
-  if (!isConfirmed) return;
-
-  if (currentUser.customId && !GAS_DATABASE_URL.includes("YOUR_DATABASE")) {
-    try {
-      navigator.sendBeacon(`${GAS_DATABASE_URL}?action=logout&customId=${encodeURIComponent(currentUser.customId)}`);
-    } catch (e) {
-      fetch(`${GAS_DATABASE_URL}?action=logout&customId=${encodeURIComponent(currentUser.customId)}`, { mode: "no-cors" }).catch(() => {});
-    }
-  }
-
-  localStorage.clear();
-  sessionStorage.clear();
-
-  const currentPath = window.location.pathname;
-  const basePath = currentPath.substring(0, currentPath.lastIndexOf('/') + 1);
-  const targetLoginUrl = window.location.origin + basePath + 'login.html';
-
-  window.location.replace(targetLoginUrl);
-};
-
-window.handleLogout = window.triggerCompleteLogout;
-
-
-// =========================================================================
-// 4. 在席メンバー自動同期（30秒周期・エポックミリ秒治療済み）
-// =========================================================================
 function syncLoungeMembersFromGAS() {
   if (GAS_DATABASE_URL.includes("YOUR_DATABASE")) return;
   fetch(`${GAS_DATABASE_URL}?action=getLoungeMembers`)
@@ -322,8 +495,6 @@ window.sendOpenChatMessage = function() {
 // =========================================================================
 // 6. Gemini API専用隠蔽プロキシ対話エンジン（ヘッダー連動）
 // =========================================================================
-
-// ヘッダーボタン連動：AIエージェントウィンドウ開閉
 window.toggleAiConcierge = function() {
   const win = document.getElementById('aiConciergeWindow');
   const btn = document.getElementById('headerAiTriggerBtn');
@@ -338,7 +509,6 @@ window.toggleAiConcierge = function() {
   }
 };
 
-// 独立プロキシGAS経由のセキュアAI対話処理
 window.askAiConcierge = async function() {
   const input = document.getElementById('aiChatInput');
   const sendBtn = document.getElementById('aiChatSendBtn');
@@ -347,7 +517,6 @@ window.askAiConcierge = async function() {
 
   const stream = document.getElementById('aiChatStream');
 
-  // 1. ユーザー発言を描画
   const userBubble = document.createElement('div');
   userBubble.className = 'chat-bubble mine';
   userBubble.innerText = userText;
@@ -355,7 +524,6 @@ window.askAiConcierge = async function() {
   input.value = '';
   stream.scrollTop = stream.scrollHeight;
 
-  // 2. 思考中インジケータ表示
   sendBtn.disabled = true;
   const loadingIndicator = document.createElement('div');
   loadingIndicator.className = 'ai-typing-indicator';
@@ -374,7 +542,6 @@ window.askAiConcierge = async function() {
       throw new Error("app.js 内の GAS_GEMINI_PROXY_URL が未設定です。Gemini専用プロキシGASのURLを設定してください。");
     }
 
-    // 3. 独立プロキシGASへ中継リクエスト
     const response = await fetch(GAS_GEMINI_PROXY_URL, {
       method: "POST",
       headers: { "Content-Type": "text/plain" },
@@ -393,7 +560,6 @@ window.askAiConcierge = async function() {
       ? resData.candidates[0].content.parts[0].text
       : "申し訳ありません、返答の生成に失敗しました。";
 
-    // 4. 会話履歴にAI返答を追加（マルチターン文脈保持）
     aiConversationHistory.push({
       role: "model",
       parts: [{ text: aiReplyText }]
@@ -568,14 +734,21 @@ window.verifyAdminSecretPass = function() {
 };
 
 window.launchAdminCommandCenter = function() {
-  document.getElementById('userAppContainer').style.display = 'none';
-  document.getElementById('adminDashboardRoot').style.display = 'flex';
+  const authView = document.getElementById('authViewContainer');
+  const userView = document.getElementById('userAppContainer');
+  const adminView = document.getElementById('adminDashboardRoot');
+
+  if (authView) authView.style.setProperty('display', 'none', 'important');
+  if (userView) userView.style.setProperty('display', 'none', 'important');
+  if (adminView) adminView.style.setProperty('display', 'flex', 'important');
+  
   fetchAdminUsers();
 };
 
 window.exitAdminCenter = function() {
-  document.getElementById('adminDashboardRoot').style.display = 'none';
-  document.getElementById('userAppContainer').style.display = 'flex';
+  const adminView = document.getElementById('adminDashboardRoot');
+  if (adminView) adminView.style.setProperty('display', 'none', 'important');
+  updateAppViewState();
 };
 
 function fetchAdminUsers() {
@@ -669,6 +842,8 @@ window.switchAdminSubView = function(id, btn) {
   const t = document.getElementById(id);
   if (t) t.style.display = 'block';
 };
+
+
 // =========================================================================
 // 9. 基本UI制御・ユーティリティ・起動パイプライン
 // =========================================================================
@@ -727,226 +902,18 @@ window.submitCreateGuild = function() {
   alert(`ギルド【${name}】を設立しました！`);
 };
 
-// 初期起動処理
-window.onload = () => {
-  document.getElementById('displayUsername').innerText = `${currentUser.name} (${currentUser.customId})`;
-  document.getElementById('dashUserGreeting').innerText = currentUser.name;
-  document.getElementById('hubCustomIdDisplay').innerText = currentUser.customId;
-  document.getElementById('hubLikesDisplay').innerText = currentUser.likesReceived;
-
-  const badge = document.getElementById('headerRankBadge');
-  badge.className = `ore-rank-badge rank-${currentUser.rank.toLowerCase()}`;
-  badge.innerText = currentUser.rank;
-
-  // スプレッドシート在席自動同期開始
-  syncLoungeMembersFromGAS();
-  setInterval(syncLoungeMembersFromGAS, 30000);
-
-  // ソーシャル描画
-  renderFeed();
-  renderStories();
-
-  // 運営自動直行判定
-  const urlParams = new URLSearchParams(window.location.search);
-  if (urlParams.get('launchAdmin') === 'true' || localStorage.getItem('cncm_is_admin') === 'true') {
-    launchAdminCommandCenter();
-  }
-};
-
-// =========================================================================
-// ★ 404エラー完全撲滅：同一画面内でのログイン/ログアウト・ビュー切り替え
-// =========================================================================
-
-// アプリ画面全体の表示制御関数
-function updateAppViewState() {
-  const authView = document.getElementById('authViewContainer');
-  const userView = document.getElementById('userAppContainer');
-  const adminView = document.getElementById('adminDashboardRoot');
-
-  // 未ログインの場合：ログインカードのみを表示（404は絶対に起きない！）
-  if (!currentUser.customId) {
-    if (authView) authView.style.display = 'flex';
-    if (userView) userView.style.display = 'none';
-    if (adminView) adminView.style.display = 'none';
-    switchAuthMode('login');
-    return;
-  }
-
-  // 運営直行フラグがある場合：管理者画面を表示
-  const urlParams = new URLSearchParams(window.location.search);
-  if (urlParams.get('launchAdmin') === 'true' || localStorage.getItem('cncm_is_admin') === 'true') {
-    if (authView) authView.style.display = 'none';
-    launchAdminCommandCenter();
-    return;
-  }
-
-  // 通常ログイン済みの場合：一般ポータル画面を表示
-  if (authView) authView.style.display = 'none';
-  if (userView) userView.style.display = 'flex';
-  if (adminView) adminView.style.display = 'none';
+// 【重要】DOMパース完了時に確実に発火させる起動パイプライン
+document.addEventListener('DOMContentLoaded', () => {
+  console.log("CNCM Master Core Initialized Successfully.");
   
-  updateUserHeaderUI();
-}
-
-// 認証タブ切替（ログイン ⇄ 新規登録）
-window.switchAuthMode = function(mode) {
-  const loginSection = document.getElementById('loginFormSection');
-  const regSection = document.getElementById('registerFormSection');
-  const tabLogin = document.getElementById('tabLoginBtn');
-  const tabReg = document.getElementById('tabRegisterBtn');
-
-  if (loginSection) loginSection.style.display = (mode === 'login') ? 'block' : 'none';
-  if (regSection) regSection.style.display = (mode === 'register') ? 'block' : 'none';
-  if (tabLogin) tabLogin.classList.toggle('active', mode === 'login');
-  if (tabReg) tabReg.classList.toggle('active', mode === 'register');
-
-  if (mode === 'register') {
-    const regId = document.getElementById('regCustomIdInput');
-    if (regId && !regId.value) regId.value = `CNCM-${Math.floor(1000 + Math.random() * 9000)}`;
-  }
-};
-
-let inAppAvatarBase64 = null;
-window.handleInAppAvatarSelect = function(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = (evt) => {
-    inAppAvatarBase64 = evt.target.result;
-    document.getElementById('regAvatarBox').innerHTML = `<img src="${inAppAvatarBase64}" style="width:100%;height:100%;object-fit:cover;">`;
-  };
-  reader.readAsDataURL(file);
-};
-
-// 同一画面内でのログイン実行
-window.executeInAppLogin = function() {
-  const idOrName = document.getElementById('loginIdInput').value.trim();
-  const pass = document.getElementById('loginPasswordInput').value.trim();
-  const status = document.getElementById('loginStatusText');
-
-  if (!idOrName || !pass) {
-    status.style.color = 'var(--danger)';
-    status.innerText = 'IDとパスワードを入力してください。';
-    return;
-  }
-
-  status.style.color = 'var(--text-sub)';
-  status.innerText = '照合中...';
-
-  // 運営アカウント直接判定
-  if (idOrName.startsWith('ADMIN-') || idOrName === 'CNCM-OWNER') {
-    if (!GAS_DATABASE_URL.includes("YOUR_DATABASE")) {
-      fetch(`${GAS_DATABASE_URL}?action=verifyAdminAccount&customId=${encodeURIComponent(idOrName)}&password=${encodeURIComponent(pass)}`)
-        .then(res => res.json())
-        .then(res => {
-          if (res.status === 'success') {
-            localStorage.setItem('cncm_is_admin', 'true');
-            localStorage.setItem('cncm_custom_id', res.admin.customId);
-            localStorage.setItem('cncm_username', res.admin.name);
-            currentUser.customId = res.admin.customId;
-            currentUser.name = res.admin.name;
-            updateAppViewState();
-          } else {
-            status.style.color = 'var(--danger)';
-            status.innerText = '運営認証に失敗しました。';
-          }
-        });
-      return;
-    }
-  }
-
-  // 一般クリエイター入場
-  localStorage.setItem('cncm_is_admin', 'false');
-  localStorage.setItem('cncm_custom_id', idOrName);
-  localStorage.setItem('cncm_username', idOrName);
-  localStorage.setItem('cncm_rank', 'Coal');
-  currentUser.customId = idOrName;
-  currentUser.name = idOrName;
-
-  status.style.color = 'var(--success)';
-  status.innerText = '入場します...';
-  setTimeout(() => { updateAppViewState(); }, 400);
-};
-
-// 同一画面内での新規登録実行
-window.executeInAppRegister = function() {
-  const customId = document.getElementById('regCustomIdInput').value.trim();
-  const name = document.getElementById('regNicknameInput').value.trim();
-  const pass = document.getElementById('regPasswordInput').value.trim();
-  const status = document.getElementById('regStatusText');
-
-  if (!customId || !name || pass.length < 6) {
-    status.style.color = 'var(--danger)';
-    status.innerText = '全項目を入力してください（パスワード6文字以上）。';
-    return;
-  }
-
-  // GASへ登録
-  if (!GAS_DATABASE_URL.includes("YOUR_DATABASE")) {
-    fetch(GAS_DATABASE_URL, {
-      method: "POST",
-      mode: "no-cors",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "registerUser", customId: customId, nickname: name, avatar: "🎨", password: pass })
-    });
-  }
-
-  localStorage.setItem('cncm_custom_id', customId);
-  localStorage.setItem('cncm_username', name);
-  localStorage.setItem('cncm_avatar', '🎨');
-  if (inAppAvatarBase64) localStorage.setItem('cncm_custom_image', inAppAvatarBase64);
-  localStorage.setItem('cncm_rank', 'Coal');
-  localStorage.setItem('cncm_is_admin', 'false');
-
-  currentUser.customId = customId;
-  currentUser.name = name;
-  updateAppViewState();
-};
-
-// 【完全安全ログアウト】別ページに飛ばず、同一画面でログインカードに戻るだけ！
-window.triggerCompleteLogout = function() {
-  const isConfirmed = confirm('【CNCM セッション終了】\nログアウトしてログイン画面に戻りますか？');
-  if (!isConfirmed) return;
-
-  if (currentUser.customId && !GAS_DATABASE_URL.includes("YOUR_DATABASE")) {
-    try { navigator.sendBeacon(`${GAS_DATABASE_URL}?action=logout&customId=${encodeURIComponent(currentUser.customId)}`); } catch(e) {}
-  }
-
-  localStorage.clear();
-  sessionStorage.clear();
-  currentUser.customId = '';
-  currentUser.name = '';
-
-  // 画面遷移（リダイレクト）を一切行わず、ログインビューに切り替えるだけ！
-  updateAppViewState();
-};
-
-function updateUserHeaderUI() {
-  const dName = document.getElementById('displayUsername');
-  const dGreet = document.getElementById('dashUserGreeting');
-  const hId = document.getElementById('hubCustomIdDisplay');
-  const hLikes = document.getElementById('hubLikesDisplay');
-
-  if (dName) dName.innerText = `${currentUser.name} (${currentUser.customId})`;
-  if (dGreet) dGreet.innerText = currentUser.name;
-  if (hId) hId.innerText = currentUser.customId;
-  if (hLikes) hLikes.innerText = currentUser.likesReceived;
-
-  const badge = document.getElementById('headerRankBadge');
-  if (badge) {
-    badge.className = `ore-rank-badge rank-${currentUser.rank.toLowerCase()}`;
-    badge.innerText = currentUser.rank;
-  }
-}
-
-// 初期起動処理（すべてこの中で完結）
-window.onload = () => {
+  // 1. ビュー状態初期化（ログインカードを即座に描画）
   updateAppViewState();
 
+  // 2. 自習室在席同期
   syncLoungeMembersFromGAS();
   setInterval(syncLoungeMembersFromGAS, 30000);
 
+  // 3. ソーシャル描画
   renderFeed();
   renderStories();
-};
-
+});
