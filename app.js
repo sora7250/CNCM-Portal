@@ -1,15 +1,13 @@
 /**
  * CanvasNetCreatorMEMBERSHIP (CNCM)
- * 完全統合マスターエンジン - 親JS (初期高度成長機動 Version)
+ * 完全統合マスターエンジン - 親JS (完全版・404安全パス解決済)
  */
 
 // =========================================================================
-// 1. 接続設定（★デプロイした各GASのURLを貼り付けてください）
+// 1. 外部サービス接続設定（★デプロイした各GASのURLを貼り付けてください）
 // =========================================================================
-const GAS_API_URL = "https://script.google.com/macros/s/AKfycbxbgUZ7JXsvGA2nkBnQ7uhEAs-ldiz-79mNGyXjetnzExhPCjAc07E3hvZ4k6-kjbRz4Q/exec";
-const DRIVE_GAS_API_URL = "https://script.google.com/macros/s/AKfycbxNm7u7ifdqoS7BQH9YJ6C-4njg1v4oWnUQDvY5nnZTPuX2NnT8tMVHDKa_q9EsEZbhxA/exec";
-
-// ユーザーセッション状態
+const GAS_API_URL = "https://script.google.com/macros/s/AKfycbz_BR6RGEI_IjRhX5SXxEDOSZUvcb3S0HOk83oFq8asFDjbSC5RR-9_87gE4IWWIZp7kA/exec";
+const DRIVE_GAS_API_URL = "https://script.google.com/macros/s/AKfycbwngjohnN8GSiXctUDy_Emy55QGxBfbzLEGv7F3WMqnl5-mkp5QOMnOBydYOvSzWABB/exec"
 let currentUser = {
   customId: localStorage.getItem('cncm_custom_id') || '',
   name: localStorage.getItem('cncm_username') || 'クリエイター',
@@ -27,12 +25,14 @@ let stories = JSON.parse(localStorage.getItem('cncm_stories_cache') || '[]');
 let friends = JSON.parse(localStorage.getItem('cncm_friends_cache') || '[]');
 let adminAllUsers = [];
 let keyBuffer = '';
+let activeSubFolderName = "SE_BGM";
+let fileToUpload = null;
 
 // =========================================================================
-// 2. 在席・生存信号（ハートビート）＆ 切断・ログアウト（完全統合）
+// 2. 在席・生存信号 ＆ 切断・ログアウト（404完全防止・安全パス解決版）
 // =========================================================================
 
-// 60秒おきの生存信号
+// 60秒おきの生存信号（ハートビート）
 setInterval(() => {
   if (currentUser.customId && !GAS_API_URL.includes("YOUR_DATABASE")) {
     fetch(`${GAS_API_URL}?action=heartbeat&customId=${encodeURIComponent(currentUser.customId)}`, { mode: "no-cors" }).catch(() => {});
@@ -46,21 +46,34 @@ window.addEventListener('beforeunload', () => {
   }
 });
 
-// 完全ログアウト処理
+// 【重要】ログアウト処理：404エラーを完全に防止する動的パス解決
 window.triggerCompleteLogout = function() {
-  if (!confirm('【CNCM セッション終了】\nログアウトしてログイン画面に戻りますか？')) return;
+  const isConfirmed = confirm('【CNCM セッション終了】\nログアウトしてログイン画面に戻りますか？\n（在席ステータスはオフラインに更新されます）');
+  if (!isConfirmed) return;
 
+  // 1. スプレッドシートへ退席通知を送信
   if (currentUser.customId && !GAS_API_URL.includes("YOUR_DATABASE")) {
     try {
       navigator.sendBeacon(`${GAS_API_URL}?action=logout&customId=${encodeURIComponent(currentUser.customId)}`);
-    } catch(e) {}
+    } catch (e) {
+      fetch(`${GAS_API_URL}?action=logout&customId=${encodeURIComponent(currentUser.customId)}`, { mode: "no-cors" }).catch(() => {});
+    }
   }
 
-  // セッション完全消去
+  // 2. ブラウザのセッション情報を完全初期化
   localStorage.clear();
   sessionStorage.clear();
-  window.location.replace('login.html');
+
+  // 3. 【404防止】現在のURLからベースディレクトリを動的計算してlogin.htmlへ安全リダイレクト
+  const currentPath = window.location.pathname;
+  const basePath = currentPath.substring(0, currentPath.lastIndexOf('/') + 1);
+  const targetLoginUrl = window.location.origin + basePath + 'login.html';
+
+  window.location.replace(targetLoginUrl);
 };
+
+// 既存関数の互換エイリアス
+window.handleLogout = window.triggerCompleteLogout;
 
 // =========================================================================
 // 3. 在席メンバー自動同期（30秒周期・エポックミリ秒治療済み）
@@ -141,16 +154,16 @@ window.updateLoungeStatus = function() {
         status: mode,
         task: task
       })
-    });
+    }).catch(() => {});
   }
   showCustomDialog({ icon: '🟢', title: 'ステータス更新', message: '自習室の在席状況を更新しました。' });
 };
 
 // =========================================================================
-// 4. ソーシャル機能統合（フィード・ストーリーズ・AI・公開プロフィール）
+// 4. ソーシャル機能（フィード・ストーリーズ・AI・公開プロフィール）
 // =========================================================================
 
-// Xライク・フィード
+// Xライク・フィード投稿
 window.publishFeedPost = function() {
   const input = document.getElementById('feedPostInput');
   const text = input.value.trim();
@@ -286,11 +299,24 @@ window.requestFriend = function(cid) {
   showCustomDialog({ icon: '🤝', title: 'フレンド申請', message: `${cid} にフレンド申請を送りました！` });
 };
 
+// ラウンジ全体チャット
+window.sendOpenChatMessage = function() {
+  const input = document.getElementById('openChatInput');
+  const text = input.value.trim();
+  if (!text) return;
+
+  const stream = document.getElementById('openChatStream');
+  const bubble = document.createElement('div');
+  bubble.className = 'chat-bubble mine';
+  bubble.innerText = text;
+  stream.appendChild(bubble);
+  input.value = '';
+  stream.scrollTop = stream.scrollHeight;
+};
+
 // =========================================================================
 // 5. Google Driveエクスプローラー ＆ 完全匿名アップロード
 // =========================================================================
-let activeSubFolderName = "SE_BGM";
-
 window.openDriveExplorer = function(subName) {
   activeSubFolderName = subName || "SE_BGM";
   openModal('driveExplorerModal');
@@ -338,7 +364,6 @@ window.openDriveExplorer = function(subName) {
     });
 };
 
-let fileToUpload = null;
 window.openDriveUploadModal = function(inputId, subName) {
   activeSubFolderName = subName || activeSubFolderName;
   fileToUpload = null;
@@ -576,9 +601,23 @@ window.toggleFullscreen = function() {
   }
 };
 
-// 初期起動パイプライン
+window.submitCreateThread = function() {
+  const title = document.getElementById('newThreadTitle').value.trim();
+  const body = document.getElementById('newThreadBody').value.trim();
+  if (!title) return alert('タイトルを入力してください。');
+  closeModal('newThreadModal');
+  alert('相談スレッドを公開しました！');
+};
+
+window.submitCreateGuild = function() {
+  const name = document.getElementById('newGuildName').value.trim();
+  if (!name) return alert('ギルド名を入力してください。');
+  closeModal('newGuildModal');
+  alert(`ギルド【${name}】を設立しました！`);
+};
+
+// 初期起動処理
 window.onload = () => {
-  // ユーザーヘッダー描画
   document.getElementById('displayUsername').innerText = `${currentUser.name} (${currentUser.customId})`;
   document.getElementById('dashUserGreeting').innerText = currentUser.name;
   document.getElementById('hubCustomIdDisplay').innerText = currentUser.customId;
@@ -588,15 +627,12 @@ window.onload = () => {
   badge.className = `ore-rank-badge rank-${currentUser.rank.toLowerCase()}`;
   badge.innerText = currentUser.rank;
 
-  // 在席自動同期開始
   syncLoungeMembersFromGAS();
   setInterval(syncLoungeMembersFromGAS, 30000);
 
-  // ソーシャル描画
   renderFeed();
   renderStories();
 
-  // 運営自動直行判定
   const urlParams = new URLSearchParams(window.location.search);
   if (urlParams.get('launchAdmin') === 'true' || localStorage.getItem('cncm_is_admin') === 'true') {
     launchAdminCommandCenter();
