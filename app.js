@@ -28,11 +28,55 @@ let loungeMembers = [];
 let feedPosts = JSON.parse(localStorage.getItem('cncm_feed_cache') || '[]');
 let stories = JSON.parse(localStorage.getItem('cncm_stories_cache') || '[]');
 let friends = JSON.parse(localStorage.getItem('cncm_friends_cache') || '[]');
+let guildDataStore = JSON.parse(localStorage.getItem('cncm_guilds_cache') || '[]');
 let adminAllUsers = [];
 let keyBuffer = '';
 let activeSubFolderName = "SE_BGM";
 let fileToUpload = null;
 let inAppAvatarBase64 = null;
+
+// ギルド初期シードデータ（空の場合のみ注入）
+if (guildDataStore.length === 0) {
+  guildDataStore = [
+    {
+      id: "guild_alpha",
+      name: "3D CG & VFX 連合",
+      desc: "Blender, Maya, Unreal Engine等で3D映像やアセットを制作する総合ギルド。",
+      leader: "CNCM-OWNER",
+      members: ["CNCM-OWNER"],
+      clans: [
+        {
+          id: "clan_alpha_1",
+          name: "Blenderモデリング班",
+          desc: "キャラクターや背景のローポリ/ハイポリ制作",
+          members: ["CNCM-OWNER"]
+        },
+        {
+          id: "clan_alpha_2",
+          name: "UE5背景ライティング班",
+          desc: "リアルタイムレンダリングと質感の追求",
+          members: []
+        }
+      ]
+    },
+    {
+      id: "guild_beta",
+      name: "Sound & Music Creators",
+      desc: "BGM、効果音、ボイスドラマの制作とミックス・マスタリング研究。",
+      leader: "ADMIN-001",
+      members: ["ADMIN-001"],
+      clans: [
+        {
+          id: "clan_beta_1",
+          name: "SE・効果音工房",
+          desc: "アクション・UI向け効果音の自作共有",
+          members: ["ADMIN-001"]
+        }
+      ]
+    }
+  ];
+  localStorage.setItem('cncm_guilds_cache', JSON.stringify(guildDataStore));
+}
 
 // AIエージェント対話履歴バッファ（システムコンテキスト内蔵）
 let aiConversationHistory = [
@@ -70,9 +114,10 @@ function updateAppViewState() {
     return;
   }
 
-  // 2. 運営直行フラグがある場合：管理者画面を表示
+  // 2. 運営直行フラグがある場合（一時脱出フラグがない場合のみ）：管理者画面を表示
   const urlParams = new URLSearchParams(window.location.search);
-  if (urlParams.get('launchAdmin') === 'true' || localStorage.getItem('cncm_is_admin') === 'true') {
+  const isTempExit = sessionStorage.getItem('cncm_temp_exit_admin') === 'true';
+  if (!isTempExit && (urlParams.get('launchAdmin') === 'true' || localStorage.getItem('cncm_is_admin') === 'true')) {
     authView.style.setProperty('display', 'none', 'important');
     userView.style.setProperty('display', 'none', 'important');
     launchAdminCommandCenter();
@@ -139,13 +184,14 @@ window.executeInAppLogin = function() {
     status.innerText = '照合中...';
   }
 
-  // 運営アカウント直接判定
+  // 運営アカウント判定
   if (idOrName.startsWith('ADMIN-') || idOrName === 'CNCM-OWNER') {
     if (!GAS_DATABASE_URL.includes("YOUR_DATABASE")) {
       fetch(`${GAS_DATABASE_URL}?action=verifyAdminAccount&customId=${encodeURIComponent(idOrName)}&password=${encodeURIComponent(pass)}`)
         .then(res => res.json())
         .then(res => {
           if (res.status === 'success') {
+            sessionStorage.removeItem('cncm_temp_exit_admin');
             localStorage.setItem('cncm_is_admin', 'true');
             localStorage.setItem('cncm_custom_id', res.admin.customId);
             localStorage.setItem('cncm_username', res.admin.name);
@@ -169,6 +215,7 @@ window.executeInAppLogin = function() {
 
 function proceedGeneralLogin(idOrName) {
   const status = document.getElementById('loginStatusText');
+  sessionStorage.removeItem('cncm_temp_exit_admin');
   localStorage.setItem('cncm_is_admin', 'false');
   localStorage.setItem('cncm_custom_id', idOrName);
   localStorage.setItem('cncm_username', idOrName);
@@ -207,6 +254,7 @@ window.executeInAppRegister = function() {
     }).catch(() => {});
   }
 
+  sessionStorage.removeItem('cncm_temp_exit_admin');
   localStorage.setItem('cncm_custom_id', customId);
   localStorage.setItem('cncm_username', name);
   localStorage.setItem('cncm_avatar', '🎨');
@@ -493,7 +541,214 @@ window.sendOpenChatMessage = function() {
 
 
 // =========================================================================
-// 6. Gemini API専用隠蔽プロキシ対話エンジン（ヘッダー連動）
+// 6. 【完全実装】ギルド（親）＆ クラン（子）階層システム
+// =========================================================================
+function renderGuildList() {
+  const container = document.getElementById('guildListContainer');
+  const dashCount = document.getElementById('dashGuildCount');
+  if (dashCount) dashCount.innerText = guildDataStore.length;
+  if (!container) return;
+
+  container.innerHTML = '';
+
+  if (guildDataStore.length === 0) {
+    container.innerHTML = '<div class="empty-state-notice" style="grid-column:1/-1;">設立されたギルドはありません。「＋ ギルド設立」から最初の組織を結成しましょう！</div>';
+    return;
+  }
+
+  guildDataStore.forEach(g => {
+    const isGuildMember = (g.members || []).includes(currentUser.customId);
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.style.display = 'flex';
+    card.style.flexDirection = 'column';
+    card.style.gap = '0.6rem';
+
+    // クラン一覧HTMLの動的組み立て
+    let clansHtml = '';
+    if (g.clans && g.clans.length > 0) {
+      clansHtml = g.clans.map(c => {
+        const isClanMember = (c.members || []).includes(currentUser.customId);
+        return `
+          <div style="background:var(--bg-main); border:1px solid var(--border); border-radius:6px; padding:0.5rem 0.8rem; margin-top:0.4rem; display:flex; justify-content:space-between; align-items:center;">
+            <div>
+              <strong style="font-size:0.82rem;">🛡️ クラン: ${c.name}</strong>
+              <div class="sub-text">${c.desc} (${(c.members || []).length}名所属)</div>
+            </div>
+            <div>
+              ${isClanMember 
+                ? `<button class="btn btn-secondary btn-small" onclick="leaveClan('${g.id}', '${c.id}')">離脱</button>`
+                : `<button class="btn btn-primary btn-small" onclick="joinClan('${g.id}', '${c.id}')" ${!isGuildMember ? 'title="親ギルドに参加すると加入できます"' : ''}>参加</button>`
+              }
+            </div>
+          </div>
+        `;
+      }).join('');
+    } else {
+      clansHtml = '<div class="sub-text" style="padding:0.4rem 0;">傘下クランはまだ結成されていません。</div>';
+    }
+
+    card.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+        <div>
+          <h3 style="font-size:1.1rem; color:var(--accent);">🏰 ${g.name}</h3>
+          <div class="sub-text">リーダー: ${g.leader} ｜ 構成員: ${(g.members || []).length}名</div>
+        </div>
+        <div>
+          ${isGuildMember
+            ? `<button class="btn btn-danger btn-small" onclick="leaveGuild('${g.id}')">ギルド離脱</button>`
+            : `<button class="btn btn-primary btn-small" onclick="joinGuild('${g.id}')">ギルド加入</button>`
+          }
+        </div>
+      </div>
+      <p style="font-size:0.85rem; line-height:1.4;">${g.desc}</p>
+      
+      <!-- 傘下クランエリア -->
+      <div style="border-top:1px dashed var(--border); padding-top:0.5rem; margin-top:0.3rem;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <strong style="font-size:0.85rem; color:var(--text-sub);">傘下クラン（専門小部隊）</strong>
+          ${isGuildMember ? `<button class="btn btn-outline btn-small" onclick="openNewClanDialog('${g.id}')">＋ クラン結成</button>` : ''}
+        </div>
+        <div style="display:flex; flex-direction:column; gap:0.3rem; margin-top:0.3rem;">
+          ${clansHtml}
+        </div>
+      </div>
+    `;
+    container.appendChild(card);
+  });
+}
+
+// ギルド新規設立
+window.submitCreateGuild = function() {
+  const nameInput = document.getElementById('newGuildName');
+  const descInput = document.getElementById('newGuildDesc');
+  const name = nameInput ? nameInput.value.trim() : '';
+  const desc = descInput ? descInput.value.trim() : '';
+
+  if (!name) return alert('ギルド名を入力してください。');
+
+  const newGuild = {
+    id: 'guild_' + Date.now(),
+    name: name,
+    desc: desc || 'クリエイターギルド',
+    leader: currentUser.customId || 'ゲスト',
+    members: [currentUser.customId],
+    clans: []
+  };
+
+  guildDataStore.unshift(newGuild);
+  saveGuildDataStore();
+  closeModal('newGuildModal');
+  if (nameInput) nameInput.value = '';
+  if (descInput) descInput.value = '';
+
+  renderGuildList();
+  showCustomDialog({ icon: '🏰', title: 'ギルド設立完了', message: `新ギルド【${name}】を設立しました！` });
+};
+
+// クラン新規結成ダイアログ
+window.openNewClanDialog = function(guildId) {
+  const name = prompt('結成するクラン（小グループ）の名前を入力してください:');
+  if (!name) return;
+  const desc = prompt('クランの活動概要・専門分野を入力してください:') || '';
+
+  const g = guildDataStore.find(x => x.id === guildId);
+  if (!g) return;
+
+  if (!g.clans) g.clans = [];
+  g.clans.push({
+    id: 'clan_' + Date.now(),
+    name: name,
+    desc: desc,
+    members: [currentUser.customId]
+  });
+
+  saveGuildDataStore();
+  renderGuildList();
+  showCustomDialog({ icon: '🛡️', title: 'クラン結成', message: `ギルド【${g.name}】内にクラン【${name}】を結成しました！` });
+};
+
+// ギルド参加・離脱
+window.joinGuild = function(guildId) {
+  const g = guildDataStore.find(x => x.id === guildId);
+  if (!g) return;
+  if (!g.members.includes(currentUser.customId)) {
+    g.members.push(currentUser.customId);
+    saveGuildDataStore();
+    renderGuildList();
+    showCustomDialog({ icon: '🤝', title: 'ギルド加入', message: `【${g.name}】に加入しました！` });
+  }
+};
+
+window.leaveGuild = function(guildId) {
+  const g = guildDataStore.find(x => x.id === guildId);
+  if (!g) return;
+  if (!confirm(`ギルド【${g.name}】から離脱しますか？\n（所属クランからも自動的に離脱します）`)) return;
+
+  g.members = g.members.filter(m => m !== currentUser.customId);
+  // 傘下クランからもカスケード連動離脱
+  if (g.clans) {
+    g.clans.forEach(c => {
+      c.members = (c.members || []).filter(m => m !== currentUser.customId);
+    });
+  }
+
+  saveGuildDataStore();
+  renderGuildList();
+};
+
+// クラン参加・離脱
+window.joinClan = function(guildId, clanId) {
+  const g = guildDataStore.find(x => x.id === guildId);
+  if (!g) return;
+
+  // 親ギルド未加入の場合は自動で親ギルドにも加入
+  if (!g.members.includes(currentUser.customId)) {
+    g.members.push(currentUser.customId);
+  }
+
+  const c = (g.clans || []).find(x => x.id === clanId);
+  if (!c) return;
+
+  if (!c.members.includes(currentUser.customId)) {
+    c.members.push(currentUser.customId);
+    saveGuildDataStore();
+    renderGuildList();
+    showCustomDialog({ icon: '🛡️', title: 'クラン配属', message: `クラン【${c.name}】に参加しました！` });
+  }
+};
+
+window.leaveClan = function(guildId, clanId) {
+  const g = guildDataStore.find(x => x.id === guildId);
+  if (!g || !g.clans) return;
+  const c = g.clans.find(x => x.id === clanId);
+  if (!c) return;
+
+  c.members = (c.members || []).filter(m => m !== currentUser.customId);
+  saveGuildDataStore();
+  renderGuildList();
+};
+
+function saveGuildDataStore() {
+  localStorage.setItem('cncm_guilds_cache', JSON.stringify(guildDataStore));
+
+  // スプレッドシート（グループ台帳）へ同期
+  if (GAS_DATABASE_URL && !GAS_DATABASE_URL.includes("YOUR_DATABASE")) {
+    fetch(GAS_DATABASE_URL, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "syncGuilds",
+        guilds: guildDataStore
+      })
+    }).catch(() => {});
+  }
+}
+
+
+// =========================================================================
+// 7. Gemini API専用隠蔽プロキシ対話エンジン（ヘッダー連動）
 // =========================================================================
 window.toggleAiConcierge = function() {
   const win = document.getElementById('aiConciergeWindow');
@@ -592,7 +847,7 @@ window.askAiConcierge = async function() {
 
 
 // =========================================================================
-// 7. Google Drive専用GAS連携（素材エクスプローラー ＆ 完全匿名アップロード）
+// 8. Google Drive専用GAS連携（素材エクスプローラー ＆ 完全匿名アップロード）
 // =========================================================================
 window.openDriveExplorer = function(subName) {
   activeSubFolderName = subName || "SE_BGM";
@@ -710,7 +965,7 @@ window.executeDriveUpload = function() {
 
 
 // =========================================================================
-// 8. 管理者裏コマンド ＆ 統括司令室エンジン
+// 9. 管理者裏コマンド ＆ 統括司令室エンジン（完全脱出保証）
 // =========================================================================
 window.addEventListener('keydown', (e) => {
   const tag = document.activeElement ? document.activeElement.tagName : '';
@@ -727,6 +982,7 @@ window.verifyAdminSecretPass = function() {
   const pass = document.getElementById('adminSecretInputBox').value.trim();
   if (pass === 'canvas2026') {
     closeModal('adminSecretAuthModal');
+    sessionStorage.removeItem('cncm_temp_exit_admin');
     launchAdminCommandCenter();
   } else {
     alert('セキュリティコードが違います。');
@@ -745,10 +1001,27 @@ window.launchAdminCommandCenter = function() {
   fetchAdminUsers();
 };
 
+// 【重要】管理画面監禁解除：URLパラメータ消去＆安全脱出
 window.exitAdminCenter = function() {
   const adminView = document.getElementById('adminDashboardRoot');
+  const userView = document.getElementById('userAppContainer');
+  const authView = document.getElementById('authViewContainer');
+
+  // 1. URLクエリから launchAdmin を消去
+  if (window.location.search.includes('launchAdmin')) {
+    const cleanUrl = window.location.origin + window.location.pathname;
+    window.history.replaceState({}, document.title, cleanUrl);
+  }
+
+  // 2. 一時離脱フラグをセット
+  sessionStorage.setItem('cncm_temp_exit_admin', 'true');
+
+  // 3. 表示を一般クリエイター空間へ強制切り替え
   if (adminView) adminView.style.setProperty('display', 'none', 'important');
-  updateAppViewState();
+  if (authView) authView.style.setProperty('display', 'none', 'important');
+  if (userView) userView.style.setProperty('display', 'flex', 'important');
+
+  updateUserHeaderUI();
 };
 
 function fetchAdminUsers() {
@@ -845,7 +1118,7 @@ window.switchAdminSubView = function(id, btn) {
 
 
 // =========================================================================
-// 9. 基本UI制御・ユーティリティ・起動パイプライン
+// 10. 基本UI制御・ユーティリティ・起動パイプライン
 // =========================================================================
 window.switchMainTab = function(panelId, btn) {
   document.querySelectorAll('.main-tab-btn').forEach(b => b.classList.remove('active'));
@@ -895,18 +1168,11 @@ window.submitCreateThread = function() {
   alert('相談スレッドを公開しました！');
 };
 
-window.submitCreateGuild = function() {
-  const name = document.getElementById('newGuildName').value.trim();
-  if (!name) return alert('ギルド名を入力してください。');
-  closeModal('newGuildModal');
-  alert(`ギルド【${name}】を設立しました！`);
-};
-
-// 【重要】DOMパース完了時に確実に発火させる起動パイプライン
+// 【重要】DOMロード完了時に確実に発火させる完全起動パイプライン
 document.addEventListener('DOMContentLoaded', () => {
   console.log("CNCM Master Core Initialized Successfully.");
   
-  // 1. ビュー状態初期化（ログインカードを即座に描画）
+  // 1. ビュー状態初期化
   updateAppViewState();
 
   // 2. 自習室在席同期
@@ -916,4 +1182,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // 3. ソーシャル描画
   renderFeed();
   renderStories();
+
+  // 4. 【新設】ギルド＆クラン一覧の確実な初期描画！
+  renderGuildList();
 });
