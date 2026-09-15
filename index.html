@@ -216,15 +216,18 @@
         </div>
       </section>
 
-      <!-- 3. ギルド・クラン -->
+      <!-- 3. ギルド・クラン（親子階層完全対応） -->
       <section id="panel-guilds" class="app-panel">
         <div class="panel-scroll-box">
           <div class="card-header">
-            <h3>👥 ギルド ＆ クラン 連合組織</h3>
+            <div>
+              <h3>👥 ギルド ＆ クラン 連合組織</h3>
+              <p class="sub-text">大組織「ギルド」と、その傘下に属する専門部隊「クラン」の制作ネットワークです。</p>
+            </div>
             <button class="btn btn-primary btn-small" onclick="openModal('newGuildModal')">＋ ギルド設立</button>
           </div>
-          <div id="guildListContainer" class="guild-grid-container">
-            <div class="empty-state-notice">ギルド・クランを照会中...</div>
+          <div id="guildListContainer" class="guild-grid-container" style="margin-top: 0.8rem;">
+            <div class="empty-state-notice">ギルド・クランを読み込み中...</div>
           </div>
         </div>
       </section>
@@ -427,7 +430,8 @@
         <button class="admin-menu-btn" onclick="switchAdminSubView('admin-view-panic', this)">🛑 緊急安全・パニック</button>
       </nav>
       <div style="padding:1rem; border-top:1px solid var(--border);">
-        <button class="btn btn-outline" style="width:100%;" onclick="exitAdminCenter()">一般画面へ脱出</button>
+        <!-- ★監禁解除：一般画面へ安全に戻る脱出ボタン -->
+        <button class="btn btn-outline" style="width:100%; font-weight:bold;" onclick="exitAdminCenter()">一般画面へ脱出</button>
       </div>
     </aside>
 
