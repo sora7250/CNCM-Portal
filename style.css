@@ -67,12 +67,67 @@ html, body { width: 100%; height: 100%; height: 100dvh; overflow: hidden; backgr
 .feed-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem; }
 .feed-actions { display: flex; gap: 1rem; margin-top: 0.6rem; color: var(--text-sub); font-size: 0.78rem; }
 
-/* AIコンシェルジュ */
-.ai-concierge-bubble { position: fixed; bottom: 1.5rem; right: 1.5rem; width: 48px; height: 48px; border-radius: 50%; background: var(--accent); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; cursor: pointer; box-shadow: 0 4px 14px rgba(99, 102, 241, 0.5); z-index: 1200; }
-.ai-concierge-window { position: fixed; bottom: 5rem; right: 1.5rem; width: 340px; height: 420px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); display: flex; flex-direction: column; z-index: 1200; overflow: hidden; }
-.ai-window-header { padding: 0.6rem 0.8rem; background: var(--bg-sub); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
-.ai-window-body { flex: 1; min-height: 0; overflow-y: auto; padding: 0.8rem; display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.8rem; }
-.ai-window-footer { padding: 0.5rem; background: var(--bg-sub); border-top: 1px solid var(--border); display: flex; gap: 0.4rem; }
+/* ヘッダー連動：AIエージェント ドロップウィンドウ */
+.ai-concierge-window {
+  position: fixed;
+  top: 54px;
+  right: 1rem;
+  width: 380px;
+  max-width: calc(100vw - 2rem);
+  height: 520px;
+  max-height: calc(100dvh - 70px);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+  z-index: 2500;
+  overflow: hidden;
+  backdrop-filter: blur(10px);
+}
+
+.ai-window-header {
+  padding: 0.7rem 1rem;
+  background: var(--bg-sub);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ai-window-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  font-size: 0.85rem;
+  -webkit-overflow-scrolling: touch;
+}
+
+.ai-window-footer {
+  padding: 0.6rem 0.8rem;
+  background: var(--bg-sub);
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 0.5rem;
+}
+
+.ai-typing-indicator {
+  align-self: flex-start;
+  background: var(--bg-main);
+  border: 1px solid var(--border);
+  color: var(--text-sub);
+  padding: 0.4rem 0.8rem;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
 
 /* ダッシュボード */
 .dash-welcome-box { margin-bottom: 1rem; }
