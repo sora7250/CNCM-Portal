@@ -221,8 +221,8 @@ html, body { width: 100%; height: 100%; height: 100dvh; overflow: hidden; backgr
 .modal-body { flex: 1; min-height: 0; overflow-y: auto; }
 .empty-state-notice { margin: auto; color: var(--text-sub); font-size: 0.85rem; text-align: center; padding: 1.5rem 0; }
 
-/* ギルド・ドライブ */
-.guild-grid-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0.8rem; }
+/* ギルド・クラン・ドライブ */
+.guild-grid-container { display: flex; flex-direction: column; gap: 1rem; }
 .drive-shortcuts-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.8rem; }
 .drive-folder-card { background: var(--bg-main); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; display: flex; flex-direction: column; align-items: center; text-align: center; cursor: pointer; }
 
