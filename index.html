@@ -8,7 +8,7 @@
 </head>
 <body>
 
-  <!-- ================= 共通通知ポップアップ ================= -->
+  <!-- ================= 共通通知ポップアップダイアログ ================= -->
   <div class="custom-modal-backdrop" id="customDialog">
     <div class="custom-dialog-card">
       <div class="dialog-icon" id="dialogIcon">ℹ️</div>
@@ -35,8 +35,8 @@
     </div>
   </div>
 
-  <!-- ================= 【新設内包】ログイン ＆ 新規登録ビュー ================= -->
-  <div id="authViewContainer" class="auth-viewport-wrapper" style="display: none;">
+  <!-- ================= 【完全内包】ログイン ＆ 新規登録ビュー ================= -->
+  <div id="authViewContainer" class="auth-viewport-wrapper">
     <div class="login-card">
       <div class="brand-title">CanvasNetCreatorMEMBERSHIP</div>
       <p class="brand-desc">完全匿名・相互扶助のクリエイター空間へようこそ。</p>
@@ -50,7 +50,7 @@
       <!-- ① ログインフォーム -->
       <div id="loginFormSection">
         <div class="form-group">
-          <label>固有ID または 登録名</label>
+          <label>固有ID または 登録ネーム</label>
           <input type="text" id="loginIdInput" class="form-control" placeholder="CNCM-XXXX または 登録ID">
         </div>
         <div class="form-group">
@@ -282,7 +282,7 @@
     </div>
     <div class="ai-window-body" id="aiChatStream">
       <div class="chat-bubble other">
-        こんにちは！CNCM専属AIエージェントです。創作の壁打ちから機能案内まで、何でも気軽に相談してくださいね！✨
+        こんにちは！CNCM専属AIエージェントです。創作の壁打ち（アイデア出し、色彩・構成・音響相談）からアプリの使い方案内まで、何でも気軽に相談してくださいね！✨
       </div>
     </div>
     <div class="ai-window-footer">
@@ -306,7 +306,7 @@
             <p>ロールランク: <span class="ore-rank-badge rank-coal" id="hubRankBadge">Coal</span></p>
             <p>累計イイネ数: <span id="hubLikesDisplay">0</span></p>
             <div style="margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 0.8rem;">
-              <button class="btn btn-danger btn-small" onclick="triggerCompleteLogout()">🚪 ログアウト</button>
+              <button class="btn btn-danger btn-small" onclick="triggerCompleteLogout()">🚪 完全にログアウト</button>
             </div>
           </div>
           <div class="card">
