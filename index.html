@@ -2,46 +2,74 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
   <title>CanvasNetCreatorMEMBERSHIP - CNCM</title>
   <link rel="stylesheet" href="style.css">
+  
+  <!-- Firebase SDK for Google Auth -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
 </head>
 <body>
 
-  <!-- ================= 共通通知ポップアップダイアログ ================= -->
-  <div class="custom-modal-backdrop" id="customDialog">
-    <div class="custom-dialog-card">
+  <!-- ================= 0. スタイリッシュ起動ブートスクリーン ================= -->
+  <div id="bootSplashScreen" class="boot-splash-overlay">
+    <div class="boot-logo-box">
+      <div class="boot-logo-glitch">CNCM</div>
+      <div class="boot-tagline">CanvasNetCreatorMEMBERSHIP</div>
+      <div class="boot-loader-track">
+        <div class="boot-loader-bar"></div>
+      </div>
+      <div class="boot-status-text" id="bootStatusText">Core Engine Initializing...</div>
+    </div>
+  </div>
+
+  <!-- ================= 全画面共通トースト通知 ================= -->
+  <div id="toastNotificationContainer" class="toast-container"></div>
+
+  <!-- ================= 全画面共通ガラス調ローディングオーバーレイ ================= -->
+  <div id="globalLoadingOverlay" class="global-loading-overlay" style="display: none;">
+    <div class="loading-glass-card">
+      <div class="loading-spinner"></div>
+      <div class="loading-label" id="globalLoadingLabel">同期処理中...</div>
+    </div>
+  </div>
+
+  <!-- ================= 共通ポップアップダイアログ ================= -->
+  <div class="custom-modal-backdrop" id="customDialog" style="display: none;">
+    <div class="glass-modal-card custom-dialog-card">
       <div class="dialog-icon" id="dialogIcon">ℹ️</div>
       <h4 class="dialog-title" id="dialogTitle">通知</h4>
       <p class="dialog-message" id="dialogMessage">メッセージ内容</p>
       <div class="dialog-actions" id="dialogActions">
-        <button class="btn btn-primary" id="dialogConfirmBtn">OK</button>
-        <button class="btn btn-secondary" id="dialogCancelBtn" style="display: none;">キャンセル</button>
+        <button class="btn btn-primary glass-interactive" id="dialogConfirmBtn">OK</button>
+        <button class="btn btn-secondary glass-interactive" id="dialogCancelBtn" style="display: none;">キャンセル</button>
       </div>
     </div>
   </div>
 
   <!-- ================= 管理者裏コマンド認証モーダル ================= -->
-  <div class="modal-backdrop" id="adminSecretAuthModal">
-    <div class="modal-sheet" style="max-width: 360px; text-align: center; border: 2px solid var(--danger);">
-      <div style="font-size: 2.2rem; margin-bottom: 0.5rem;">🚨</div>
+  <div class="custom-modal-backdrop" id="adminSecretAuthModal" style="display: none;">
+    <div class="glass-modal-card" style="max-width: 380px; text-align: center; border-color: rgba(239, 68, 68, 0.4);">
+      <div style="font-size: 2.4rem; margin-bottom: 0.5rem;">🚨</div>
       <h3 style="color: var(--danger); margin-bottom: 0.3rem;">管理者認証</h3>
-      <p class="sub-text" style="margin-bottom: 1rem;">統括司令室へ突入するためのセキュリティコードを入力してください。</p>
+      <p class="sub-text" style="margin-bottom: 1.2rem;">統括司令室へ突入するためのセキュリティコードを入力してください。</p>
       <input type="password" id="adminSecretInputBox" class="form-control" placeholder="Passcode (canvas2026)" style="text-align: center; font-size: 1.1rem; letter-spacing: 2px; margin-bottom: 1rem;">
-      <div style="display: flex; gap: 0.5rem;">
-        <button class="btn btn-secondary" style="flex: 1;" onclick="closeModal('adminSecretAuthModal')">中止</button>
-        <button class="btn btn-danger" style="flex: 1;" onclick="verifyAdminSecretPass()">認証入場</button>
+      <div style="display: flex; gap: 0.6rem;">
+        <button class="btn btn-secondary glass-interactive" style="flex: 1;" onclick="closeModal('adminSecretAuthModal')">中止</button>
+        <button class="btn btn-danger glass-interactive" style="flex: 1;" onclick="verifyAdminSecretPass()">認証入場</button>
       </div>
     </div>
   </div>
 
-  <!-- ================= 【完全内包】ログイン ＆ 新規登録ビュー ================= -->
-  <div id="authViewContainer" class="auth-viewport-wrapper">
-    <div class="login-card">
-      <div class="brand-title">CanvasNetCreatorMEMBERSHIP</div>
-      <p class="brand-desc">完全匿名・相互扶助のクリエイター空間へようこそ。</p>
+  <!-- ================= 認証ビュー（ログイン ＆ 新規登録） ================= -->
+  <div id="authViewContainer" class="auth-viewport-wrapper" style="display: none;">
+    <div class="glass-card login-glass-card">
+      <div class="brand-badge-pill">CNCM SECURE GATEWAY</div>
+      <div class="brand-title">CanvasNetCreator</div>
+      <p class="brand-desc">完全匿名・相互扶助の次世代クリエイター空間</p>
 
-      <!-- 認証方式切替タブ -->
+      <!-- 認証タブ切替 -->
       <div class="auth-tab-bar">
         <button class="auth-tab-btn active" id="tabLoginBtn" onclick="switchAuthMode('login')">ログイン</button>
         <button class="auth-tab-btn" id="tabRegisterBtn" onclick="switchAuthMode('register')">新規登録</button>
@@ -49,28 +77,33 @@
 
       <!-- ① ログインフォーム -->
       <div id="loginFormSection">
+        <button class="btn btn-google glass-interactive" onclick="executeGoogleAuth()">
+          <span style="font-size: 1.1rem;">🔴</span> Googleアカウントでログイン
+        </button>
+        <div class="separator-line"><span>または 固有ID / パスワード</span></div>
+        
         <div class="form-group">
           <label>固有ID または 登録ネーム</label>
-          <input type="text" id="loginIdInput" class="form-control" placeholder="CNCM-XXXX または 登録ID">
+          <input type="text" id="loginIdInput" class="form-control" placeholder="CNCM-XXXX または 登録ネーム">
         </div>
         <div class="form-group">
           <label>パスワード</label>
           <input type="password" id="loginPasswordInput" class="form-control" placeholder="パスワードを入力" onkeydown="if(event.key==='Enter') executeInAppLogin()">
         </div>
-        <button class="btn btn-primary" style="width: 100%; margin-top: 0.8rem;" onclick="executeInAppLogin()">入場する</button>
+        <button class="btn btn-primary glass-interactive" style="width: 100%; margin-top: 1rem;" onclick="executeInAppLogin()">入場する</button>
         <div class="status-msg" id="loginStatusText"></div>
       </div>
 
       <!-- ② 新規登録フォーム -->
       <div id="registerFormSection" style="display: none;">
-        <div class="avatar-preview-box" id="regAvatarBox" onclick="document.getElementById('regAvatarFileInput').click()" title="タップして自由写真をアップロード">
+        <div class="avatar-preview-box glass-interactive" id="regAvatarBox" onclick="document.getElementById('regAvatarFileInput').click()" title="タップして自由写真をアップロード">
           <span id="regAvatarEmoji">🎨</span>
         </div>
         <input type="file" id="regAvatarFileInput" accept="image/*" style="display: none;" onchange="handleInAppAvatarSelect(event)">
         <div style="font-size: 0.72rem; color: var(--text-sub); margin-bottom: 0.8rem;">▲ タップして写真をアバターに設定</div>
 
         <div class="form-group">
-          <label>運営管理用 固有ID（自動採番）</label>
+          <label>運営管理用 固有ID（自動採番・変更可）</label>
           <input type="text" id="regCustomIdInput" class="form-control" maxlength="15">
         </div>
         <div class="form-group">
@@ -81,7 +114,7 @@
           <label>パスワード（半角英数6文字以上）</label>
           <input type="password" id="regPasswordInput" class="form-control" placeholder="パスワードを設定">
         </div>
-        <button class="btn btn-primary" style="width: 100%; margin-top: 0.8rem;" onclick="executeInAppRegister()">アカウントを作成して入場</button>
+        <button class="btn btn-primary glass-interactive" style="width: 100%; margin-top: 1rem;" onclick="executeInAppRegister()">アカウントを作成して入場</button>
         <div class="status-msg" id="regStatusText"></div>
       </div>
     </div>
@@ -90,21 +123,24 @@
   <!-- ================= 一般クリエイター空間 ================= -->
   <div id="userAppContainer" class="app-root-view" style="display: none;">
     
-    <!-- 統合ヘッダー（AI相談ボタン一元化版） -->
-    <header class="app-header">
+    <!-- 統合グラスヘッダー -->
+    <header class="app-header glass-header">
       <div class="header-left">
         <span class="brand-logo">CNCM</span>
         <span class="ore-rank-badge rank-coal" id="headerRankBadge">Coal</span>
       </div>
       <div class="header-center">
-        <span class="header-username" id="displayUsername">読み込み中...</span>
+        <span class="header-username" id="displayUsername">同期中...</span>
       </div>
       <div class="header-right">
-        <button class="icon-action-btn" id="headerAiTriggerBtn" onclick="toggleAiConcierge()" title="CNCM専属AIエージェント起動">🤖 AI相談</button>
-        <button class="icon-action-btn" id="salvagedHeaderLogoutBtn" style="color: var(--danger); border-color: var(--danger);" onclick="triggerCompleteLogout()" title="安全にログアウト">🚪 退出</button>
-        <button class="icon-action-btn" id="fullscreenToggleBtn" onclick="toggleFullscreen()" title="全画面切替">⛶</button>
-        <button class="icon-action-btn" onclick="openModal('accountHubModal')" title="アカウント統合管理">👤 マイ管理</button>
-        <div class="header-avatar" id="headerAvatar" onclick="openModal('profileModal')">🎨</div>
+        <!-- 手動クイック全体同期ボタン -->
+        <button class="icon-action-btn glass-interactive" id="headerSyncBtn" onclick="triggerManualSync()" title="最新データへ強制同期">🔄 同期</button>
+        <!-- Gemini AIエージェント起動ボタン -->
+        <button class="icon-action-btn glass-interactive" id="headerAiTriggerBtn" onclick="toggleAiConcierge()" title="CNCM専属AIエージェント起動">🤖 AI相談</button>
+        <button class="icon-action-btn glass-interactive" id="salvagedHeaderLogoutBtn" style="color: var(--danger); border-color: rgba(239, 68, 68, 0.4);" onclick="triggerCompleteLogout()" title="安全にログアウト">🚪 退出</button>
+        <button class="icon-action-btn glass-interactive" id="fullscreenToggleBtn" onclick="toggleFullscreen()" title="全画面切替">⛶</button>
+        <button class="icon-action-btn glass-interactive" onclick="openModal('accountHubModal')" title="アカウント統合管理">👤 マイ管理</button>
+        <div class="header-avatar glass-interactive" id="headerAvatar" onclick="openModal('accountHubModal')">🎨</div>
       </div>
     </header>
 
@@ -114,23 +150,23 @@
       <span class="alert-text" id="emergencyBannerText"></span>
     </div>
 
-    <!-- 24時間ストーリーズ・トレイ -->
-    <div class="stories-scroll-tray" id="storiesTray">
-      <div class="story-circle add-story" onclick="openNewStoryDialog()">
+    <!-- 24時間ストーリーズ・トレイ（画像・動画対応・24h消滅判定） -->
+    <div class="stories-scroll-tray glass-panel" id="storiesTray">
+      <div class="story-circle add-story glass-interactive" onclick="openNewStoryModal()">
         <div class="story-avatar-wrap">＋</div>
-        <span>追加</span>
+        <span>ストーリー</span>
       </div>
     </div>
 
-    <!-- メインタブナビゲーション -->
-    <nav class="main-tab-bar" id="mainTabBar">
-      <button class="main-tab-btn active" onclick="switchMainTab('panel-dashboard', this)">📊 ダッシュボード</button>
-      <button class="main-tab-btn" onclick="switchMainTab('panel-feed', this)">📱 フィード</button>
-      <button class="main-tab-btn" onclick="switchMainTab('panel-lounge', this)">🏠 ポート・ラウンジ</button>
-      <button class="main-tab-btn" onclick="switchMainTab('panel-guilds', this)">👥 ギルド・クラン</button>
-      <button class="main-tab-btn" onclick="switchMainTab('panel-forum', this)">💬 相談Q&A</button>
-      <button class="main-tab-btn" onclick="switchMainTab('panel-events', this)">🏆 企画・お題</button>
-      <button class="main-tab-btn" onclick="switchMainTab('panel-drive', this)">📁 素材Drive</button>
+    <!-- メインタブナビゲーション（グラス調） -->
+    <nav class="main-tab-bar glass-nav" id="mainTabBar">
+      <button class="main-tab-btn active glass-interactive" onclick="switchMainTab('panel-dashboard', this)">📊 ダッシュボード</button>
+      <button class="main-tab-btn glass-interactive" onclick="switchMainTab('panel-feed', this)">📱 フィード</button>
+      <button class="main-tab-btn glass-interactive" onclick="switchMainTab('panel-lounge', this)">🏠 ポート・ラウンジ</button>
+      <button class="main-tab-btn glass-interactive" onclick="switchMainTab('panel-guilds', this)">👥 ギルド・クラン</button>
+      <button class="main-tab-btn glass-interactive" onclick="switchMainTab('panel-forum', this)">💬 相談Q&A</button>
+      <button class="main-tab-btn glass-interactive" onclick="switchMainTab('panel-events', this)">🏆 企画・お題</button>
+      <button class="main-tab-btn glass-interactive" onclick="switchMainTab('panel-drive', this)">📁 素材Drive</button>
     </nav>
 
     <!-- メインビューポート -->
@@ -141,43 +177,74 @@
         <div class="panel-scroll-box">
           <div class="dash-welcome-box">
             <h2>ようこそ、<span id="dashUserGreeting">クリエイター</span> さん</h2>
-            <p class="sub-text">コミュニティの活況と最新トピックをリアルタイムで掌握できます。</p>
+            <p class="sub-text">コミュニティの活況と最新トピックをリアルタイムで掌握できます。（各タイルをタップで詳細プレビュー）</p>
           </div>
+          
+          <!-- 立体グラスモフィズム インサイトタイル -->
           <div class="dash-metric-tiles">
-            <div class="metric-tile"><span class="m-val" id="dashOnlineCount">0</span><span class="m-lbl">現在在席中</span></div>
-            <div class="metric-tile"><span class="m-val" id="dashFeedCount">0</span><span class="m-lbl">フィード投稿数</span></div>
-            <div class="metric-tile"><span class="m-val" id="dashGuildCount">0</span><span class="m-lbl">稼働ギルド</span></div>
+            <div class="glass-card metric-tile glass-interactive" onclick="openDashInsight('online')">
+              <span class="m-val" id="dashOnlineCount">0</span>
+              <span class="m-lbl">● 現在在席中</span>
+              <span class="m-hint">タップで名簿表示 ➔</span>
+            </div>
+            <div class="glass-card metric-tile glass-interactive" onclick="openDashInsight('feed')">
+              <span class="m-val" id="dashFeedCount">0</span>
+              <span class="m-lbl">📱 フィード投稿数</span>
+              <span class="m-hint">タップでハイライト ➔</span>
+            </div>
+            <div class="glass-card metric-tile glass-interactive" onclick="openDashInsight('guild')">
+              <span class="m-val" id="dashGuildCount">0</span>
+              <span class="m-lbl">👥 稼働ギルド</span>
+              <span class="m-hint">タップで組織詳細 ➔</span>
+            </div>
           </div>
-          <div class="card">
-            <div class="card-header"><h3>🎯 注目の公式コンペティション</h3></div>
-            <div id="dashFeaturedTopicArea"><div class="empty-state-notice">現在開催中の公式お題はありません</div></div>
+
+          <div class="glass-card card">
+            <div class="card-header">
+              <h3>🎯 注目の公式コンペティション</h3>
+              <button class="btn btn-outline btn-small glass-interactive" onclick="switchMainTab('panel-events', document.querySelectorAll('.main-tab-btn')[5])">すべて見る</button>
+            </div>
+            <div id="dashFeaturedTopicArea">
+              <div class="empty-state-notice">現在開催中の公式お題はありません</div>
+            </div>
           </div>
         </div>
       </section>
 
-      <!-- 1. リアルタイム・クリエイターフィード -->
+      <!-- 1. リアルタイム・クリエイターフィード（Threadsライク・画像複数添付対応） -->
       <section id="panel-feed" class="app-panel">
         <div class="feed-layout">
-          <div class="feed-compose-bar">
-            <input type="text" id="feedPostInput" class="form-control" placeholder="今なにしてる？ 進捗・つぶやきを投稿..." onkeydown="if(event.key==='Enter') publishFeedPost()">
-            <button class="btn btn-primary btn-small" onclick="publishFeedPost()">投稿</button>
+          <div class="glass-card feed-compose-bar">
+            <div class="compose-inner">
+              <textarea id="feedPostInput" class="form-control feed-textarea" rows="2" placeholder="進捗・作品・制作のつぶやきを投稿..."></textarea>
+              <div id="feedImagePreviewStrip" class="image-preview-strip" style="display: none;"></div>
+              <div class="compose-actions-bar">
+                <input type="file" id="feedImageFileInput" accept="image/*" multiple style="display: none;" onchange="handleFeedImageSelect(event)">
+                <button class="btn btn-outline btn-small glass-interactive" onclick="document.getElementById('feedImageFileInput').click()">
+                  🖼️ 画像を追加
+                </button>
+                <button class="btn btn-primary btn-small glass-interactive" id="publishFeedBtn" onclick="publishFeedPost()">
+                  🚀 投稿する
+                </button>
+              </div>
+            </div>
           </div>
           <div class="feed-stream" id="feedStreamArea">
-            <div class="empty-state-notice">フィード投稿を読み込み中...</div>
+            <div class="empty-state-notice">フィード投稿を同期中...</div>
           </div>
         </div>
       </section>
 
       <!-- 2. ポート・ラウンジ（在席自習室 ＆ 全体チャット） -->
       <section id="panel-lounge" class="app-panel">
-        <div class="sub-tab-bar">
-          <button class="sub-tab-btn active" onclick="switchSubTab('panel-lounge', 'sub-port', this)">🟢 ポート (在席自習室)</button>
-          <button class="sub-tab-btn" onclick="switchSubTab('panel-lounge', 'sub-lounge', this)">💬 ラウンジ (全体チャット)</button>
+        <div class="sub-tab-bar glass-sub-nav">
+          <button class="sub-tab-btn active glass-interactive" onclick="switchSubTab('panel-lounge', 'sub-port', this)">🟢 ポート (在席自習室)</button>
+          <button class="sub-tab-btn glass-interactive" onclick="switchSubTab('panel-lounge', 'sub-lounge', this)">💬 ラウンジ (全体チャット)</button>
         </div>
 
         <div id="sub-port" class="sub-panel active">
           <div class="panel-scroll-box">
-            <div class="card">
+            <div class="glass-card card">
               <div class="card-header"><h3>自習室チェックイン・ステータス更新</h3></div>
               <div class="form-grid-2">
                 <select id="myStatusMode" class="form-control">
@@ -186,12 +253,12 @@
                   <option value="work">🟡 作業中 (急ぎ以外NG)</option>
                   <option value="rest">☕ 休憩中</option>
                 </select>
-                <input type="text" id="myTaskInput" class="form-control" placeholder="作業内容・ひとこと">
+                <input type="text" id="myTaskInput" class="form-control" placeholder="現在の作業内容（例：3Dモデリング中）">
               </div>
-              <button class="btn btn-primary" style="margin-top: 0.6rem;" onclick="updateLoungeStatus()">ステータス更新して在席</button>
+              <button class="btn btn-primary glass-interactive" style="margin-top: 0.8rem;" onclick="updateLoungeStatus()">ステータス更新して在席</button>
             </div>
 
-            <div class="card no-margin-bottom">
+            <div class="glass-card card no-margin-bottom">
               <div class="card-header">
                 <h3>リアルタイム在席メンバー一覧</h3>
                 <span class="badge badge-ok" id="loungeOnlineCounter">● 同期中</span>
@@ -208,9 +275,9 @@
         <div id="sub-lounge" class="sub-panel">
           <div class="chat-viewport">
             <div class="chat-stream" id="openChatStream"></div>
-            <div class="chat-input-bar">
-              <input type="text" id="openChatInput" class="form-control" placeholder="メッセージを入力（ダブルタップでスキ）" onkeydown="if(event.key==='Enter') sendOpenChatMessage()">
-              <button class="btn btn-primary" onclick="sendOpenChatMessage()">送信</button>
+            <div class="chat-input-bar glass-panel">
+              <input type="text" id="openChatInput" class="form-control" placeholder="ラウンジ全体にメッセージを送信..." onkeydown="if(event.key==='Enter') sendOpenChatMessage()">
+              <button class="btn btn-primary glass-interactive" onclick="sendOpenChatMessage()">送信</button>
             </div>
           </div>
         </div>
@@ -222,9 +289,9 @@
           <div class="card-header">
             <div>
               <h3>👥 ギルド ＆ クラン 連合組織</h3>
-              <p class="sub-text">大組織「ギルド」と、その傘下に属する専門部隊「クラン」の制作ネットワークです。</p>
+              <p class="sub-text">大組織「ギルド」と、その傘下に属する専門小部隊「クラン」の制作ネットワークです。</p>
             </div>
-            <button class="btn btn-primary btn-small" onclick="openModal('newGuildModal')">＋ ギルド設立</button>
+            <button class="btn btn-primary btn-small glass-interactive" onclick="openModal('newGuildModal')">＋ ギルド設立</button>
           </div>
           <div id="guildListContainer" class="guild-grid-container" style="margin-top: 0.8rem;">
             <div class="empty-state-notice">ギルド・クランを読み込み中...</div>
@@ -235,13 +302,13 @@
       <!-- 4. 相談Q&A -->
       <section id="panel-forum" class="app-panel">
         <div class="forum-split-layout">
-          <div class="forum-sidebar">
+          <div class="forum-sidebar glass-panel">
             <div class="forum-actions-bar">
-              <button class="btn btn-primary" style="width: 100%;" onclick="openModal('newThreadModal')">＋ 相談スレッド起案</button>
+              <button class="btn btn-primary glass-interactive" style="width: 100%;" onclick="openModal('newThreadModal')">＋ 相談スレッド起案</button>
             </div>
             <div class="thread-list-scroll" id="threadListScroll"></div>
           </div>
-          <div class="forum-main-content" id="threadDetailView">
+          <div class="forum-main-content glass-card" id="threadDetailView">
             <div class="empty-state-notice">左側のスレッドを選択してください</div>
           </div>
         </div>
@@ -250,20 +317,36 @@
       <!-- 5. 企画お題 -->
       <section id="panel-events" class="app-panel">
         <div class="panel-scroll-box">
-          <div id="eventTopicsGrid" class="topic-cards-grid"></div>
+          <div class="card-header">
+            <h3>🏆 公式コンペティション ＆ お題企画</h3>
+            <span class="sub-text">優秀作品は団体公式Driveへアーカイブされます</span>
+          </div>
+          <div id="eventTopicsGrid" class="topic-cards-grid" style="margin-top: 0.8rem;"></div>
         </div>
       </section>
 
       <!-- 6. 共有素材 Google Drive -->
       <section id="panel-drive" class="app-panel">
         <div class="panel-scroll-box">
-          <div class="card">
+          <div class="glass-card card">
             <div class="card-header"><h3>📁 共有素材 Google Drive</h3></div>
             <div class="drive-shortcuts-grid">
-              <div class="drive-folder-card" onclick="openDriveExplorer('SE_BGM')"><span class="folder-icon">🎵</span><strong>BGM・効果音</strong></div>
-              <div class="drive-folder-card" onclick="openDriveExplorer('VideoFootage')"><span class="folder-icon">🎬</span><strong>動画素材</strong></div>
-              <div class="drive-folder-card" onclick="openDriveExplorer('Presets')"><span class="folder-icon">⚙️</span><strong>プリセット</strong></div>
-              <div class="drive-folder-card" onclick="openDriveExplorer('Fonts_Palette')"><span class="folder-icon">🎨</span><strong>カラー設定</strong></div>
+              <div class="glass-card drive-folder-card glass-interactive" onclick="openDriveExplorer('SE_BGM')">
+                <span class="folder-icon">🎵</span><strong>BGM・効果音</strong>
+                <span class="sub-text">SE_BGM</span>
+              </div>
+              <div class="glass-card drive-folder-card glass-interactive" onclick="openDriveExplorer('VideoFootage')">
+                <span class="folder-icon">🎬</span><strong>動画素材</strong>
+                <span class="sub-text">VideoFootage</span>
+              </div>
+              <div class="glass-card drive-folder-card glass-interactive" onclick="openDriveExplorer('Presets')">
+                <span class="folder-icon">⚙️</span><strong>プリセット</strong>
+                <span class="sub-text">Presets</span>
+              </div>
+              <div class="glass-card drive-folder-card glass-interactive" onclick="openDriveExplorer('Fonts_Palette')">
+                <span class="folder-icon">🎨</span><strong>カラー設定・フォント</strong>
+                <span class="sub-text">Fonts_Palette</span>
+              </div>
             </div>
           </div>
         </div>
@@ -272,16 +355,16 @@
     </main>
   </div>
 
-  <!-- ================= 各種統合モーダル群 ================= -->
+  <!-- ================= 各種統合モーダル群（グラスモフィズム仕様） ================= -->
 
   <!-- ヘッダー連動：CNCM AIエージェント (Gemini) 対話ウィンドウ -->
-  <div class="ai-concierge-window" id="aiConciergeWindow" style="display: none;">
+  <div class="glass-card ai-concierge-window" id="aiConciergeWindow" style="display: none;">
     <div class="ai-window-header">
-      <div style="display: flex; align-items: center; gap: 0.4rem;">
-        <span style="font-size: 1.1rem;">🤖</span>
+      <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <span style="font-size: 1.2rem;">🤖</span>
         <strong>CNCM AI エージェント (Gemini)</strong>
       </div>
-      <button class="modal-close-btn" onclick="toggleAiConcierge()">✕</button>
+      <button class="modal-close-btn glass-interactive" onclick="toggleAiConcierge()">✕</button>
     </div>
     <div class="ai-window-body" id="aiChatStream">
       <div class="chat-bubble other">
@@ -290,33 +373,80 @@
     </div>
     <div class="ai-window-footer">
       <input type="text" id="aiChatInput" class="form-control" placeholder="AIエージェントに質問・相談..." onkeydown="if(event.key==='Enter') askAiConcierge()">
-      <button class="btn btn-primary btn-small" id="aiChatSendBtn" onclick="askAiConcierge()">送信</button>
+      <button class="btn btn-primary btn-small glass-interactive" id="aiChatSendBtn" onclick="askAiConcierge()">送信</button>
     </div>
   </div>
 
-  <!-- アカウント統合管理センター（マイ管理） -->
-  <div class="modal-backdrop" id="accountHubModal">
-    <div class="modal-sheet modal-sheet-lg">
+  <!-- ダッシュボード・クイックインサイト・モーダル -->
+  <div class="custom-modal-backdrop" id="dashInsightModal" style="display: none;">
+    <div class="glass-modal-card modal-sheet-lg">
+      <div class="modal-header">
+        <h3 id="dashInsightTitle">📊 詳細インサイト</h3>
+        <button class="modal-close-btn glass-interactive" onclick="closeModal('dashInsightModal')">✕</button>
+      </div>
+      <div class="modal-body" id="dashInsightBody">
+        <div class="empty-state-notice">読み込み中...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 24時間ストーリーズ新規投稿モーダル -->
+  <div class="custom-modal-backdrop" id="newStoryModal" style="display: none;">
+    <div class="glass-modal-card" style="max-width: 440px;">
+      <div class="modal-header">
+        <h3>＋ 24時間ストーリーズ投稿</h3>
+        <button class="modal-close-btn glass-interactive" onclick="closeModal('newStoryModal')">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="sub-text" style="margin-bottom: 0.8rem;">投稿から24時間後に自動で完全消滅します。画像またはひとこと進捗を共有できます。</p>
+        <div class="form-group">
+          <label>テキスト・ひとこと進捗</label>
+          <textarea id="newStoryTextInput" class="form-control" rows="3" placeholder="今やってる作業や進捗をひとこと..."></textarea>
+        </div>
+        <div class="form-group">
+          <label>メディア添付 (画像 / 動画)</label>
+          <input type="file" id="newStoryFileInput" accept="image/*,video/*" class="form-control">
+        </div>
+        <button class="btn btn-primary glass-interactive" style="width: 100%; margin-top: 0.8rem;" id="submitStoryBtn" onclick="submitNewStory()">ストーリーズを公開</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- アカウント統合管理センター（マイ管理 ＆ プロフィール変更） -->
+  <div class="custom-modal-backdrop" id="accountHubModal" style="display: none;">
+    <div class="glass-modal-card modal-sheet-lg">
       <div class="modal-header">
         <h3>👤 アカウント統合管理センター</h3>
-        <button class="modal-close-btn" onclick="closeModal('accountHubModal')">✕</button>
+        <button class="modal-close-btn glass-interactive" onclick="closeModal('accountHubModal')">✕</button>
       </div>
       <div class="modal-body">
         <div class="account-hub-grid">
-          <div class="card">
+          <!-- 活動ステータスカード -->
+          <div class="glass-card card">
             <h4>活動サマリー</h4>
-            <p>固有ID: <strong id="hubCustomIdDisplay">-</strong></p>
+            <p style="margin-top: 0.4rem;">固有ID: <strong id="hubCustomIdDisplay">-</strong></p>
             <p>ロールランク: <span class="ore-rank-badge rank-coal" id="hubRankBadge">Coal</span></p>
             <p>累計イイネ数: <span id="hubLikesDisplay">0</span></p>
-            <div style="margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 0.8rem;">
-              <button class="btn btn-danger btn-small" onclick="triggerCompleteLogout()">🚪 完全にログアウト</button>
+            <div style="margin-top: 1.2rem; border-top: 1px solid var(--glass-border); padding-top: 0.8rem;">
+              <button class="btn btn-danger btn-small glass-interactive" onclick="triggerCompleteLogout()">🚪 完全にログアウト</button>
             </div>
           </div>
-          <div class="card">
-            <h4>🤝 相互フレンドリスト</h4>
-            <div id="hubFriendList" style="max-height: 140px; overflow-y: auto;">
-              <div class="empty-state-notice">フレンドはいません</div>
+
+          <!-- プロフィール即時編集フォーム -->
+          <div class="glass-card card">
+            <h4>プロフィール編集</h4>
+            <div style="display: flex; align-items: center; gap: 1rem; margin: 0.8rem 0;">
+              <div class="avatar-preview-box glass-interactive" id="hubAvatarPreview" onclick="document.getElementById('hubAvatarInput').click()" style="margin: 0; width: 56px; height: 56px;">
+                🎨
+              </div>
+              <input type="file" id="hubAvatarInput" accept="image/*" style="display: none;" onchange="handleProfileAvatarChange(event)">
+              <span class="sub-text">▲ タップして写真を変更</span>
             </div>
+            <div class="form-group">
+              <label>表示ネーム</label>
+              <input type="text" id="hubNicknameInput" class="form-control" maxlength="15">
+            </div>
+            <button class="btn btn-primary btn-small glass-interactive" style="width: 100%;" onclick="saveProfileChanges()">プロフィールを保存</button>
           </div>
         </div>
       </div>
@@ -324,19 +454,18 @@
   </div>
 
   <!-- Google Driveファイルエクスプローラー・モーダル -->
-  <div class="modal-backdrop" id="driveExplorerModal">
-    <div class="modal-sheet modal-sheet-lg" style="max-height: 85vh; display: flex; flex-direction: column;">
+  <div class="custom-modal-backdrop" id="driveExplorerModal" style="display: none;">
+    <div class="glass-modal-card modal-sheet-lg" style="max-height: 85vh; display: flex; flex-direction: column;">
       <div class="modal-header">
         <div>
           <h3 id="explorerFolderTitle" style="display: inline;">📁 ドライブストレージ</h3>
           <span id="explorerItemCount" class="sub-text" style="margin-left: 0.5rem;">0件</span>
         </div>
-        <button class="modal-close-btn" onclick="closeModal('driveExplorerModal')">✕</button>
+        <button class="modal-close-btn glass-interactive" onclick="closeModal('driveExplorerModal')">✕</button>
       </div>
-      <div id="explorerSubFolderTabs" style="display: flex; gap: 0.4rem; overflow-x: auto; padding-bottom: 0.5rem; margin-bottom: 0.6rem; border-bottom: 1px solid var(--border); scrollbar-width: none;"></div>
-      <div style="background: var(--bg-main); border: 1px dashed var(--border); border-radius: 6px; padding: 0.6rem 0.8rem; margin-bottom: 0.8rem; display: flex; justify-content: space-between; align-items: center;">
-        <span class="sub-text">選択中のフォルダに素材を追加</span>
-        <button class="btn btn-primary btn-small" onclick="openDriveUploadModal(null, activeSubFolderName)">＋ ファイルを追加</button>
+      <div style="background: var(--glass-bg); border: 1px dashed var(--glass-border); border-radius: var(--radius-card); padding: 0.6rem 0.8rem; margin-bottom: 0.8rem; display: flex; justify-content: space-between; align-items: center;">
+        <span class="sub-text">選択中のフォルダに素材を匿名アップロード</span>
+        <button class="btn btn-primary btn-small glass-interactive" onclick="openDriveUploadModal(null, activeSubFolderName)">＋ ファイルを追加</button>
       </div>
       <div class="modal-body" id="explorerFileListArea" style="flex: 1; overflow-y: auto;">
         <div class="empty-state-notice" id="explorerLoadingNotice">親フォルダをスクリーニング中...</div>
@@ -346,92 +475,80 @@
   </div>
 
   <!-- Google Drive匿名アップロード・モーダル -->
-  <div class="modal-backdrop" id="driveUploadAddonModal">
-    <div class="modal-sheet" style="max-width: 440px; text-align: center;">
+  <div class="custom-modal-backdrop" id="driveUploadAddonModal" style="display: none;">
+    <div class="glass-modal-card" style="max-width: 440px; text-align: center;">
       <div class="modal-header">
         <h3>📁 団体Driveへ安全アップロード</h3>
-        <button class="modal-close-btn" onclick="closeModal('driveUploadAddonModal')">✕</button>
+        <button class="modal-close-btn glass-interactive" onclick="closeModal('driveUploadAddonModal')">✕</button>
       </div>
       <div class="modal-body" style="padding: 1rem 0;">
         <p class="sub-text" style="margin-bottom: 1rem;">
           ファイルはCNCM公式ドライブへ代理保存され、<br>
           <strong>あなたのGoogle本名やメールは一切残りません（完全匿名化）。</strong>
         </p>
-        <div style="border: 2px dashed var(--border); border-radius: 8px; padding: 1.5rem; margin-bottom: 1rem; background: var(--bg-main);">
+        <div style="border: 2px dashed var(--glass-border); border-radius: var(--radius-card); padding: 1.5rem; margin-bottom: 1rem; background: var(--bg-main);">
           <input type="file" id="driveAddonFileInput" style="display: none;" onchange="handleFileSelected(event)">
-          <button class="btn btn-outline" onclick="document.getElementById('driveAddonFileInput').click()">ファイルを選択</button>
+          <button class="btn btn-outline glass-interactive" onclick="document.getElementById('driveAddonFileInput').click()">ファイルを選択</button>
           <div id="selectedFileNameDisplay" class="sub-text" style="margin-top: 0.6rem; word-break: break-all;">選択されていません (上限: 約40MB)</div>
         </div>
         <div id="uploadProgressArea" style="display: none; margin-bottom: 1rem;">
           <div class="sub-text" id="uploadStatusLabel" style="color: var(--accent); margin-bottom: 0.3rem;">アップロード中...</div>
-          <div style="width: 100%; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden;">
+          <div style="width: 100%; height: 6px; background: var(--glass-border); border-radius: 3px; overflow: hidden;">
             <div id="uploadProgressBar" style="width: 0%; height: 100%; background: var(--accent); transition: width 0.3s;"></div>
           </div>
         </div>
-        <button class="btn btn-primary" id="startUploadBtn" style="width: 100%;" onclick="executeDriveUpload()" disabled>匿名アップロードを開始</button>
+        <button class="btn btn-primary glass-interactive" id="startUploadBtn" style="width: 100%;" onclick="executeDriveUpload()" disabled>匿名アップロードを開始</button>
       </div>
-    </div>
-  </div>
-
-  <!-- 公開プロフィール・モーダル -->
-  <div class="modal-backdrop" id="publicProfileModal">
-    <div class="modal-sheet">
-      <div class="modal-header">
-        <h3>クリエイター・プロフィール</h3>
-        <button class="modal-close-btn" onclick="closeModal('publicProfileModal')">✕</button>
-      </div>
-      <div class="modal-body" id="publicProfileContent"></div>
     </div>
   </div>
 
   <!-- 相談スレッド起案モーダル -->
-  <div class="modal-backdrop" id="newThreadModal">
-    <div class="modal-sheet">
+  <div class="custom-modal-backdrop" id="newThreadModal" style="display: none;">
+    <div class="glass-modal-card">
       <div class="modal-header">
         <h3>＋ 相談スレッド起案</h3>
-        <button class="modal-close-btn" onclick="closeModal('newThreadModal')">✕</button>
+        <button class="modal-close-btn glass-interactive" onclick="closeModal('newThreadModal')">✕</button>
       </div>
       <div class="modal-body">
         <div class="form-group"><label>カテゴリ</label><select id="newThreadCategory" class="form-control"><option value="help">🙋‍♂️ 助けて</option><option value="compare">👀 どっち？</option><option value="rough">🎨 ラフ見て</option></select></div>
         <div class="form-group"><label>タイトル</label><input type="text" id="newThreadTitle" class="form-control" placeholder="相談の要点を簡潔に"></div>
         <div class="form-group"><label>相談内容</label><textarea id="newThreadBody" class="form-control" rows="4" placeholder="詳細な背景や悩んでいるポイント"></textarea></div>
         <div class="form-group"><label>Google Drive 添付プレビューURL (任意)</label><input type="text" id="newThreadDriveUrl" class="form-control" placeholder="https://drive.google.com/file/d/.../preview"></div>
-        <button class="btn btn-primary" style="width:100%; margin-top:0.6rem;" onclick="submitCreateThread()">相談を公開する</button>
+        <button class="btn btn-primary glass-interactive" style="width:100%; margin-top:0.6rem;" onclick="submitCreateThread()">相談を公開する</button>
       </div>
     </div>
   </div>
 
   <!-- ギルド設立モーダル -->
-  <div class="modal-backdrop" id="newGuildModal">
-    <div class="modal-sheet">
+  <div class="custom-modal-backdrop" id="newGuildModal" style="display: none;">
+    <div class="glass-modal-card">
       <div class="modal-header">
         <h3>👥 ギルド設立</h3>
-        <button class="modal-close-btn" onclick="closeModal('newGuildModal')">✕</button>
+        <button class="modal-close-btn glass-interactive" onclick="closeModal('newGuildModal')">✕</button>
       </div>
       <div class="modal-body">
         <div class="form-group"><label>ギルド名</label><input type="text" id="newGuildName" class="form-control" placeholder="例：3Dモーション連合"></div>
         <div class="form-group"><label>活動概要</label><textarea id="newGuildDesc" class="form-control" rows="3" placeholder="制作ジャンルや活動方針"></textarea></div>
-        <button class="btn btn-primary" style="width:100%; margin-top:0.6rem;" onclick="submitCreateGuild()">ギルドを設立する</button>
+        <button class="btn btn-primary glass-interactive" style="width:100%; margin-top:0.6rem;" onclick="submitCreateGuild()">ギルドを設立する</button>
       </div>
     </div>
   </div>
 
   <!-- ================= 統括司令室（管理者フルスクリーン画面） ================= -->
   <div id="adminDashboardRoot" class="admin-full-view" style="display: none;">
-    <aside class="admin-sidebar">
-      <div style="padding:1rem; border-bottom:1px solid var(--border);">
+    <aside class="admin-sidebar glass-panel">
+      <div style="padding:1rem; border-bottom:1px solid var(--glass-border);">
         <span class="badge badge-danger">COMMAND CENTER</span>
         <h3 style="margin-top:0.3rem;">CNCM 統括司令室</h3>
       </div>
-      <nav style="flex:1; display:flex; flex-direction:column; gap:0.2rem; padding:0.5rem 0;">
-        <button class="admin-menu-btn active" onclick="switchAdminSubView('admin-view-users', this)">👥 カード型ユーザー台帳</button>
-        <button class="admin-menu-btn" onclick="switchAdminSubView('admin-view-staff', this)">👑 運営陣・アカウント発行</button>
-        <button class="admin-menu-btn" onclick="switchAdminSubView('admin-view-topics', this)">🎯 公式お題マネージャー</button>
-        <button class="admin-menu-btn" onclick="switchAdminSubView('admin-view-panic', this)">🛑 緊急安全・パニック</button>
+      <nav style="flex:1; display:flex; flex-direction:column; gap:0.3rem; padding:0.8rem 0;">
+        <button class="admin-menu-btn active glass-interactive" onclick="switchAdminSubView('admin-view-users', this)">👥 カード型ユーザー台帳</button>
+        <button class="admin-menu-btn glass-interactive" onclick="switchAdminSubView('admin-view-staff', this)">👑 運営陣・アカウント発行</button>
+        <button class="admin-menu-btn glass-interactive" onclick="switchAdminSubView('admin-view-topics', this)">🎯 公式お題マネージャー</button>
+        <button class="admin-menu-btn glass-interactive" onclick="switchAdminSubView('admin-view-panic', this)">🛑 緊急安全・パニック</button>
       </nav>
-      <div style="padding:1rem; border-top:1px solid var(--border);">
-        <!-- ★監禁解除：一般画面へ安全に戻る脱出ボタン -->
-        <button class="btn btn-outline" style="width:100%; font-weight:bold;" onclick="exitAdminCenter()">一般画面へ脱出</button>
+      <div style="padding:1rem; border-top:1px solid var(--glass-border);">
+        <button class="btn btn-outline glass-interactive" style="width:100%; font-weight:bold;" onclick="exitAdminCenter()">一般画面へ脱出</button>
       </div>
     </aside>
 
@@ -440,7 +557,7 @@
         <div style="display:flex; justify-content:space-between; align-items:center;">
           <h2>👥 アカウント管理台帳</h2>
           <div style="display:flex; gap:0.5rem;">
-            <button class="btn btn-primary btn-small" onclick="triggerSnapshotBackup()">💾 DBバックアップ</button>
+            <button class="btn btn-primary btn-small glass-interactive" onclick="triggerSnapshotBackup()">💾 DBバックアップ</button>
           </div>
         </div>
         <div class="admin-cards-grid" id="adminUserCardsGrid"><div class="empty-state-notice">ユーザーマスターを照会中...</div></div>
@@ -448,46 +565,55 @@
 
       <section id="admin-view-staff" class="admin-sub-view" style="display:none;">
         <h2>👑 運営アカウント新規発行</h2>
-        <div class="card" style="margin-top:1rem;">
+        <div class="glass-card card" style="margin-top:1rem;">
           <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.8rem;">
             <div class="form-group"><label>運営ID</label><input type="text" id="newAdminIdInput" class="form-control" placeholder="ADMIN-XXXX"></div>
             <div class="form-group"><label>名前</label><input type="text" id="newAdminNameInput" class="form-control"></div>
             <div class="form-group"><label>役職</label><select id="newAdminRoleSelect" class="form-control"><option value="モデレーター">モデレーター</option><option value="副代表">副代表</option></select></div>
             <div class="form-group"><label>パスワード</label><input type="password" id="newAdminPasswordInput" class="form-control"></div>
           </div>
-          <button class="btn btn-primary" style="margin-top:0.8rem; width:100%;" onclick="submitRegisterAdminAccount()">発行して登録</button>
+          <button class="btn btn-primary glass-interactive" style="margin-top:0.8rem; width:100%;" onclick="submitRegisterAdminAccount()">発行して登録</button>
         </div>
       </section>
 
       <section id="admin-view-topics" class="admin-sub-view" style="display:none;">
         <h2>🎯 公式お題発令所</h2>
-        <div class="card" style="margin-top:1rem;">
+        <div class="glass-card card" style="margin-top:1rem;">
           <div class="form-group"><label>タイトル</label><input type="text" id="adminNewTopicTitle" class="form-control"></div>
           <div class="form-group"><label>レギュレーション</label><textarea id="adminNewTopicDesc" class="form-control" rows="3"></textarea></div>
-          <button class="btn btn-primary" onclick="adminPublishOfficialTopic()">公式お題を配信</button>
+          <button class="btn btn-primary glass-interactive" onclick="adminPublishOfficialTopic()">公式お題を配信</button>
         </div>
       </section>
 
       <section id="admin-view-panic" class="admin-sub-view" style="display:none;">
         <h2 style="color:var(--danger);">🛑 緊急安全・パニック</h2>
-        <div class="card" style="border:2px solid var(--danger); margin-top:1rem;">
+        <div class="glass-card card" style="border:2px solid var(--danger); margin-top:1rem;">
           <h3>ワンクリック全退席 ＆ ゲート封鎖</h3>
           <p class="sub-text">接続中の全一般ユーザーを即座に強制切断し、新規登録画面を完全封鎖します。</p>
-          <button class="btn btn-danger" style="margin-top:0.8rem;" onclick="triggerPanicLockdown()">🚨 パニックモード発動</button>
+          <button class="btn btn-danger glass-interactive" style="margin-top:0.8rem;" onclick="triggerPanicLockdown()">🚨 パニックモード発動</button>
         </div>
       </section>
     </main>
-
-    <div class="modal-backdrop" id="adminSummaryAlertModal" style="display:none; z-index:4000;">
-      <div class="modal-sheet" style="border:2px solid var(--danger);">
-        <h3 style="color:var(--danger);">🚨 判定保留中の要注意ユーザー</h3>
-        <div id="adminSummaryListArea" style="margin:1rem 0;"></div>
-        <button class="btn btn-outline" style="width:100%;" onclick="closeModal('adminSummaryAlertModal')">閉じる</button>
-      </div>
-    </div>
   </div>
 
-  <!-- 【唯一の実行スクリプト】完全統合親JS -->
-  <script src="app.js"></script>
+  <!-- ================= プラグイン・モジュール読み込みパイプライン ================= -->
+  <!-- 1. 共通コア・状態管理・SWR同期エンジン -->
+  <script src="js/core.js"></script>
+  <!-- 2. 認証ゲートウェイ（Google認証 / ID/Pass） -->
+  <script src="js/auth.js"></script>
+  <!-- 3. ポート・ラウンジ在席同期エンジン -->
+  <script src="js/lounge.js"></script>
+  <!-- 4. Threadsライク リッチフィードモジュール -->
+  <script src="js/feed.js"></script>
+  <!-- 5. 24h自動消滅ストーリーズモジュール -->
+  <script src="js/stories.js"></script>
+  <!-- 6. ギルド・クラン親子階層モジュール -->
+  <script src="js/guilds.js"></script>
+  <!-- 7. Google Drive匿名ストレージ連携モジュール -->
+  <script src="js/drive.js"></script>
+  <!-- 8. Gemini API専用プロキシAIエージェント -->
+  <script src="js/ai-agent.js"></script>
+  <!-- 9. 統括司令室・管理者エンジン -->
+  <script src="js/admin.js"></script>
 </body>
 </html>
